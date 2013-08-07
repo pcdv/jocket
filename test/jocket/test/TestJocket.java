@@ -8,7 +8,6 @@ import jocket.impl.Const;
 import jocket.impl.JocketReader;
 import jocket.impl.JocketWriter;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -29,10 +28,6 @@ public class TestJocket {
 		r = new JocketReader(buf, npackets);
 	}
 
-	@After
-	public void tearDown() throws Exception {
-	}
-
 	/**
 	 * Basic test case.
 	 */
@@ -48,29 +43,23 @@ public class TestJocket {
 
 	private int write(String... strs) {
 		int total = 0;
-		int len;
-		for (String s : strs) {
-			len = w.write(s.getBytes(), 0, s.length());
-			total += len;
-		}
+		for (String s : strs)
+			total += w.write(s.getBytes(), 0, s.length());
 		return total;
 	}
 
 	private String read() {
 		byte[] buf = new byte[readBufSize];
-		int len = r.read(buf);
-		return new String(buf, 0, len);
+		return read(buf, 0, buf.length);
 	}
 
 	private String read(byte[] buf, int off, int len) {
-		int read = r.read(buf, off, len);
-		return new String(buf, off, read);
+		return new String(buf, off, r.read(buf, off, len));
 	}
 
 	/**
 	 * Check that no data can be written when the maximum number of packets is
 	 * written (but not read).
-	 * 
 	 */
 	@Test
 	public void testFullPackets() throws Exception {
