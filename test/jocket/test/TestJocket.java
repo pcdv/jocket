@@ -2,34 +2,12 @@ package jocket.test;
 
 import static junit.framework.Assert.assertEquals;
 
-import java.nio.ByteBuffer;
-
-import jocket.impl.Const;
-import jocket.impl.JocketReader;
-import jocket.impl.JocketWriter;
-
-import org.junit.Before;
 import org.junit.Test;
 
-public class TestJocket {
-
-	private JocketWriter w;
-	private JocketReader r;
-	private final int readBufSize = 8192;
-
-	@Before
-	public void setUp() throws Exception {
-	}
-
-	private void init(int npackets, int capacity) {
-		ByteBuffer buf = ByteBuffer.allocate(Const.PACKET_INFO + npackets
-		    * Const.LEN_PACKET_INFO + capacity);
-		w = new JocketWriter(buf, npackets);
-		r = new JocketReader(buf, npackets);
-	}
+public class TestJocket extends AbstractJocketTest {
 
 	/**
-	 * Basic test case.
+	 * Basic test case: write data and read it back.
 	 */
 	@Test
 	public void testBasic() {
@@ -41,25 +19,9 @@ public class TestJocket {
 		assertEquals("", read());
 	}
 
-	private int write(String... strs) {
-		int total = 0;
-		for (String s : strs)
-			total += w.write(s.getBytes(), 0, s.length());
-		return total;
-	}
-
-	private String read() {
-		byte[] buf = new byte[readBufSize];
-		return read(buf, 0, buf.length);
-	}
-
-	private String read(byte[] buf, int off, int len) {
-		return new String(buf, off, r.read(buf, off, len));
-	}
-
 	/**
 	 * Check that no data can be written when the maximum number of packets is
-	 * written (but not read).
+	 * written.
 	 */
 	@Test
 	public void testFullPackets() throws Exception {
@@ -74,6 +36,10 @@ public class TestJocket {
 		assertEquals("6666", read());
 	}
 
+	/**
+	 * Check that no data can be written when the byte buffer is full (and the
+	 * maximum number of packets is not reached).
+	 */
 	@Test
 	public void testFullData() throws Exception {
 		init(128, 32);
@@ -83,6 +49,7 @@ public class TestJocket {
 		    write("0123456789", "0123456789", "0123456789", "0123456789"));
 		assertEquals(0, w.available());
 		assertEquals(32, r.available());
+		assertEquals(0, write("foo"));
 	}
 
 	@Test
