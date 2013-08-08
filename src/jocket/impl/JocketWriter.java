@@ -34,9 +34,15 @@ public class JocketWriter extends AbstractJocketImpl {
 	}
 
 	/**
-	 * Returns the offset where next data can be written.
+	 * Returns the position immediately after the last written bytes. Warning: the
+	 * result can be equal to <code>capacity</code>, which is not equivalent to
+	 * <code>0</code> because it means that data was written at the end of buffer.
+	 * However, if there is space in the buffer, data must be written at position
+	 * <code>0</code> (as it is a circular buffer).
 	 * 
-	 * @param rseq
+	 * @param rseq the reader's sequence number. It is required because it allows
+	 *          to determine whether all data has been read, in which case the new
+	 *          head is 0 whatever the current state of packets
 	 */
 	private int head(int rseq) {
 		// if all packets are read, we can start at 0
@@ -45,30 +51,45 @@ public class JocketWriter extends AbstractJocketImpl {
 
 		final int idx = (wseq - 1) & packetMask;
 
-		return buf.getInt(PACKET_INFO + idx * LEN_PACKET_INFO)
-		    + buf.getInt(PACKET_INFO + idx * LEN_PACKET_INFO + 4);
-	}
-
-	private long start(int packet) {
-		return buf.getInt(PACKET_INFO + (packet & packetMask) * LEN_PACKET_INFO);
+		return ( //
+		buf.getInt(PACKET_INFO + idx * LEN_PACKET_INFO) + //
+		buf.getInt(PACKET_INFO + idx * LEN_PACKET_INFO + 4));
 	}
 
 	/**
-	 * Returns how many bytes can be written in one chunk at current position.
+	 * Returns the address at which specified packet starts.
+	 * 
+	 * @param seq a packet number
+	 */
+	private int start(int seq) {
+		return dataMask
+		    & buf.getInt(PACKET_INFO + (seq & packetMask) * LEN_PACKET_INFO);
+	}
+
+	/**
+	 * Returns how many bytes can be written in one single chunk at current
+	 * position. There are two cases:
+	 * <ul>
+	 * <li><b>head &gt; tail</b>: result = capacity - (head - tail)
+	 * <li><b>head &lt; tail</b>: result = tail - head
+	 * </ul>
 	 * 
 	 * @param rseq current seqnum of the reader
 	 * @param head current data head
 	 */
 	private int getAvailableSpace(int rseq, int head) {
-		int space = (int) (capacity - (head - start(rseq)));
-		if (space <= 0)
-			return 0;
+		int tail = start(rseq);
 
-		int spaceBeforeEnd = capacity - (head & dataMask);
-		if (space > spaceBeforeEnd)
-			return spaceBeforeEnd;
+		if (head == tail)
+			return capacity;
 
-		return space;
+		// if head == capacity then head = 0 (circular buffer)
+		head &= dataMask;
+
+		if (head > tail)
+			return capacity - head;
+
+		return tail - head;
 	}
 
 	private int rseq() {
