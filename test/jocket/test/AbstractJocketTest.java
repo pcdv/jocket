@@ -14,16 +14,30 @@ public class AbstractJocketTest {
 	protected JocketReader r;
 
 	protected void init(int npackets, int capacity) {
-		ByteBuffer buf = ByteBuffer.allocate(Const.PACKET_INFO + npackets
-		    * Const.LEN_PACKET_INFO + capacity);
-		w = new JocketWriter(buf, npackets);
-		r = new JocketReader(buf, npackets);
+		// allows to run tests several times without resetting the socket
+		if (w == null) {
+			ByteBuffer buf = ByteBuffer.allocate(Const.PACKET_INFO + npackets
+			    * Const.LEN_PACKET_INFO + capacity);
+			w = new JocketWriter(buf, npackets);
+			r = new JocketReader(buf, npackets);
+		}
 	}
 
 	protected int write(String... strs) {
+		return write(true, strs);
+	}
+
+	protected int write0(String... strs) {
+		return write(false, strs);
+	}
+
+	protected int write(boolean flush, String... strs) {
 		int total = 0;
-		for (String s : strs)
+		for (String s : strs) {
 			total += w.write(s.getBytes(), 0, s.length());
+			if (flush)
+				w.flush();
+		}
 		return total;
 	}
 

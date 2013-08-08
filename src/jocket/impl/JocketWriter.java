@@ -10,6 +10,10 @@ public class JocketWriter extends AbstractJocketImpl {
 	 */
 	private int wseq;
 
+	private int pstart, plen;
+
+	private boolean dirty;
+
 	public JocketWriter(ByteBuffer buf, int npackets) {
 		super(buf, npackets);
 	}
@@ -20,17 +24,29 @@ public class JocketWriter extends AbstractJocketImpl {
 		if (wseq - rseq >= npackets)
 			return 0;
 
-		final int head = head(rseq);
-		final int writable = Math.min(getAvailableSpace(rseq, head), len);
-		if (writable > 0) {
-			final int idx = wseq & packetMask;
-			buf.putInt(PACKET_INFO + idx * LEN_PACKET_INFO, head);
-			buf.putInt(PACKET_INFO + idx * LEN_PACKET_INFO + 4, writable);
+		// TODO: implement anti-truncation mechanism (write at 0 if remaining
+		// space is too small)
+		int head = pstart + plen;
+		final int bytes = Math.min(getAvailableSpace(rseq, head), len);
+		if (bytes > 0) {
+			plen += bytes;
 			buf.position(head);
-			buf.put(data, off, writable);
-			buf.putInt(WSEQ, ++wseq);
+			buf.put(data, off, bytes);
+			dirty = true;
 		}
-		return writable;
+		return bytes;
+	}
+
+	public void flush() {
+		if (dirty) {
+			final int idx = wseq & packetMask;
+			buf.putInt(PACKET_INFO + idx * LEN_PACKET_INFO, pstart);
+			buf.putInt(PACKET_INFO + idx * LEN_PACKET_INFO + 4, plen);
+			buf.putInt(WSEQ, ++wseq);
+			pstart += plen;
+			plen = 0;
+			dirty = false;
+		}
 	}
 
 	/**
@@ -62,8 +78,7 @@ public class JocketWriter extends AbstractJocketImpl {
 	 * @param seq a packet number
 	 */
 	private int start(int seq) {
-		return dataMask
-		    & buf.getInt(PACKET_INFO + (seq & packetMask) * LEN_PACKET_INFO);
+		return buf.getInt(PACKET_INFO + (seq & packetMask) * LEN_PACKET_INFO);
 	}
 
 	/**
@@ -78,18 +93,25 @@ public class JocketWriter extends AbstractJocketImpl {
 	 * @param head current data head
 	 */
 	private int getAvailableSpace(int rseq, int head) {
-		int tail = start(rseq);
 
-		if (head == tail)
-			return capacity;
+		if (rseq < wseq) {
+			int tail = start(rseq);
 
-		// if head == capacity then head = 0 (circular buffer)
-		head &= dataMask;
+			if (head == tail)
+				return capacity;
 
-		if (head > tail)
-			return capacity - head;
+			// if head == capacity then head = 0 (circular buffer)
+			head &= dataMask;
+			tail &= dataMask;
 
-		return tail - head;
+			if (head > tail)
+				return capacity - head;
+
+			return tail - head;
+		}
+
+		else
+			return capacity - (head & dataMask);
 	}
 
 	private int rseq() {
