@@ -20,6 +20,26 @@ public class TestJocket extends AbstractJocketTest {
 	}
 
 	/**
+	 * Check that consecutive writes without flushing end up in a single packet.
+	 */
+	@Test
+	public void testNoFlush() throws Exception {
+		init(128, 8);
+		assertEquals(5, write0("11111"));
+		assertEquals(3, write0("22222"));
+		assertEquals(0, r.available());
+		w.flush();
+		assertEquals(8, r.available());
+		assertEquals("11111222", read());
+	}
+
+	@Test
+	public void testNoFlush2() throws Exception {
+		testNoFlush();
+		testNoFlush();
+	}
+
+	/**
 	 * Check that no data can be written when the maximum number of packets is
 	 * written.
 	 */
@@ -50,6 +70,15 @@ public class TestJocket extends AbstractJocketTest {
 		assertEquals(0, w.available());
 		assertEquals(32, r.available());
 		assertEquals(0, write("foo"));
+	}
+
+	@Test
+	public void testFullData2() throws Exception {
+		init(128, 8);
+		assertEquals(8, w.available());
+		assertEquals(0, r.available());
+		assertEquals(5, write("11111"));
+		assertEquals(3, write("22222"));
 	}
 
 	@Test
