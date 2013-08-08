@@ -56,6 +56,9 @@ public class TestJocket extends AbstractJocketTest {
 	public void testPartialRead() throws Exception {
 		testFullData();
 		byte[] buf = new byte[100];
+		// at this point, the buffer is full
+
+		// read a part of first packet, this should free up 2 bytes for writing
 		assertEquals("01", read(buf, 10, 2));
 		assertEquals(2, w.available());
 		assertEquals(30, r.available());
@@ -71,5 +74,30 @@ public class TestJocket extends AbstractJocketTest {
 		assertEquals("0123456789", read());
 		assertEquals("0123456789", read());
 		assertEquals("01", read());
+	}
+
+	/**
+	 * Variant of the above.
+	 */
+	@Test
+	public void testPartialRead2() throws Exception {
+		testFullData();
+		byte[] buf = new byte[100];
+		// at this point, the buffer is full
+
+		// read a part of first packet, this should free up 2 bytes for writing
+		assertEquals("01", read(buf, 10, 2));
+		assertEquals(2, w.available());
+		assertEquals(30, r.available());
+
+		// fill the 2 bytes
+		assertEquals(2, write("ABCDEF"));
+
+		// read everything
+		assertEquals("23456789", read());
+		assertEquals("0123456789", read());
+		assertEquals("0123456789", read());
+		assertEquals("01", read());
+		assertEquals("AB", read());
 	}
 }
