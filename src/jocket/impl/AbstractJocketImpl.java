@@ -1,6 +1,7 @@
 package jocket.impl;
 
 import java.nio.ByteBuffer;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public abstract class AbstractJocketImpl implements Const {
 
@@ -26,6 +27,10 @@ public abstract class AbstractJocketImpl implements Const {
 	 */
 	protected final int packetMask;
 
+	private final AtomicBoolean barrier = new AtomicBoolean();
+
+	protected final int dataOffset;
+
 	public AbstractJocketImpl(ByteBuffer buf, int npackets) {
 		if (Integer.bitCount(npackets) != 1)
 			throw new IllegalArgumentException("npackets must be a power of 2");
@@ -37,5 +42,15 @@ public abstract class AbstractJocketImpl implements Const {
 			throw new IllegalArgumentException(
 			    "Buffer capacity for data must be a power of 2");
 		this.dataMask = capacity - 1;
+		this.dataOffset = Const.PACKET_INFO + npackets * LEN_PACKET_INFO;
 	}
+
+	protected void writeMemoryBarrier() {
+		barrier.lazySet(true);
+	}
+
+	protected void readMemoryBarrier() {
+		barrier.get();
+	}
+
 }

@@ -19,6 +19,7 @@ public class JocketWriter extends AbstractJocketImpl {
 	}
 
 	public int write(byte[] data, int off, int len) {
+		readMemoryBarrier();
 		final int rseq = rseq();
 		// cannot write if all packets are written and the reader didn't read them
 		if (wseq - rseq >= npackets)
@@ -30,7 +31,7 @@ public class JocketWriter extends AbstractJocketImpl {
 		final int bytes = Math.min(getAvailableSpace(rseq, head), len);
 		if (bytes > 0) {
 			plen += bytes;
-			buf.position(head);
+			buf.position(dataOffset + (head & dataMask));
 			buf.put(data, off, bytes);
 			dirty = true;
 		}

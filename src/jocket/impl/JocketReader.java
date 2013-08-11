@@ -24,23 +24,26 @@ public class JocketReader extends AbstractJocketImpl {
 
 		// if the whole packet can be read
 		if (available <= len) {
-			buf.position(position);
+			buf.position(dataOffset + (position & dataMask));
 			buf.get(data, off, available);
 			buf.putInt(RSEQ, ++rseq);
+			writeMemoryBarrier();
 			return available;
 		}
 
 		// if the packet can be read only partially
 		else {
 			// read data
-			buf.position(position);
+			buf.position(dataOffset + (position & dataMask));
 			buf.get(data, off, len);
 
 			// update packet info to make space available for writer
 			buf.putInt(PACKET_INFO + index * LEN_PACKET_INFO, position + len);
 			buf.putInt(PACKET_INFO + index * LEN_PACKET_INFO + 4, available - len);
+			writeMemoryBarrier();
 			return len;
 		}
+
 	}
 
 	public int available() {
