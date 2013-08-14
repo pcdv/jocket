@@ -1,9 +1,16 @@
 package jocket.impl;
 
 import java.nio.ByteBuffer;
+import java.util.Observable;
+import java.util.Observer;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public abstract class AbstractJocketImpl implements Const {
+/**
+ * Base class for JocketReader and JocketWriter.
+ * 
+ * @author pcdv
+ */
+public abstract class AbstractJocketBuffer implements Const {
 
 	protected final ByteBuffer buf;
 
@@ -31,7 +38,15 @@ public abstract class AbstractJocketImpl implements Const {
 
 	protected final int dataOffset;
 
-	public AbstractJocketImpl(ByteBuffer buf, int npackets) {
+	private final Observable closeObservable = new Observable() {
+		{
+			setChanged();
+		}
+	};
+
+	private boolean closed;
+
+	public AbstractJocketBuffer(ByteBuffer buf, int npackets) {
 		if (Integer.bitCount(npackets) != 1)
 			throw new IllegalArgumentException("npackets must be a power of 2");
 		this.buf = buf;
@@ -53,4 +68,27 @@ public abstract class AbstractJocketImpl implements Const {
 		barrier.get();
 	}
 
+	public void close() {
+		if (!closed) {
+			closed = true;
+			buf.put(CLOSE_FLAG, (byte) 1);
+			closeObservable.notifyObservers();
+		}
+	}
+
+	public boolean checkClosedState() {
+		if (closed)
+			return true;
+		readMemoryBarrier();
+		if (buf.get(CLOSE_FLAG) != 0) {
+			closed = true;
+			closeObservable.notifyObservers();
+			return true;
+		}
+		return false;
+	}
+
+	public void addCloseListener(Observer lis) {
+		closeObservable.addObserver(lis);
+	}
 }

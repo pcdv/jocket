@@ -17,7 +17,7 @@ import jocket.impl.JocketWriter;
  * 
  * @author pcdv
  */
-public class JocketFactory {
+public class JocketFile {
 
 	private final MappedByteBuffer buf;
 	private final RandomAccessFile io;
@@ -27,12 +27,12 @@ public class JocketFactory {
 	private final int size;
 	private final File file;
 
-	public JocketFactory() throws IOException {
+	public JocketFile() throws IOException {
 		this(File.createTempFile("jocket", ""), true);
 		file.deleteOnExit();
 	}
 
-	public JocketFactory(File file, boolean create) throws IOException {
+	public JocketFile(File file, boolean create) throws IOException {
 		if (!create && !file.exists())
 			throw new FileNotFoundException("File does not exist");
 

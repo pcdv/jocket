@@ -2,7 +2,7 @@ package jocket.sample;
 
 import java.io.IOException;
 
-import jocket.net.Jocket;
+import jocket.net.JocketSocket;
 import jocket.net.ServerJocket;
 
 public class TestServer {
@@ -18,7 +18,7 @@ public class TestServer {
 		}
 	}
 
-	public static void pipeToStdInOut(final Jocket s) {
+	public static void pipeToStdInOut(final JocketSocket s) {
 		new Thread("Reader") {
 			@Override
 			public void run() {
