@@ -2,7 +2,7 @@ package jocket.impl;
 
 import java.nio.ByteBuffer;
 
-public class JocketWriter extends AbstractJocketImpl {
+public class JocketWriter extends AbstractJocketBuffer {
 
 	/**
 	 * The sequence number of the next packet to write. Accessed only by the
@@ -19,6 +19,9 @@ public class JocketWriter extends AbstractJocketImpl {
 	}
 
 	public int write(byte[] data, int off, int len) {
+		if (checkClosedState())
+			throw new IllegalStateException("Closed");
+
 		readMemoryBarrier();
 		final int rseq = rseq();
 		// cannot write if all packets are written and the reader didn't read them

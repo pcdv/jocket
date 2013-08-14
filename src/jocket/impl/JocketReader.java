@@ -2,7 +2,7 @@ package jocket.impl;
 
 import java.nio.ByteBuffer;
 
-public class JocketReader extends AbstractJocketImpl {
+public class JocketReader extends AbstractJocketBuffer {
 
 	private int rseq;
 
@@ -15,6 +15,10 @@ public class JocketReader extends AbstractJocketImpl {
 	}
 
 	public int read(byte[] data, int off, int len) {
+
+		if (checkClosedState())
+			throw new IllegalStateException("Closed");
+
 		int wseq = buf.getInt(WSEQ);
 		if (wseq <= rseq)
 			return 0;

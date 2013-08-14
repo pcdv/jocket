@@ -12,6 +12,11 @@ public class WriteLoop {
 		byte[] buf = new byte[1024];
 		while (true) {
 			final int read = in.read(buf);
+			if (read == -1) {
+				System.out.println("Closing...");
+				writer.close();
+				return;
+			}
 			int written = 0;
 			while (written < read) {
 				int len = writer.write(buf, written, read - written);

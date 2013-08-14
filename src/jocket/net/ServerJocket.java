@@ -26,7 +26,7 @@ public class ServerJocket implements Closeable {
 		srv.close();
 	}
 
-	public Jocket accept() throws IOException {
+	public JocketSocket accept() throws IOException {
 		while (true) {
 
 			if (closed)
@@ -43,8 +43,8 @@ public class ServerJocket implements Closeable {
 
 			// TODO: make parameters configurable through ServerJocket
 			// TODO: write parameters in file header (+ misc meta data)
-			JocketFactory fw = new JocketFactory();
-			JocketFactory fr = new JocketFactory();
+			JocketFile fw = new JocketFile();
+			JocketFile fr = new JocketFile();
 
 			DataOutputStream out = new DataOutputStream(s.getOutputStream());
 			out.writeUTF(fw.getPath());
@@ -55,7 +55,7 @@ public class ServerJocket implements Closeable {
 			fr.deleteFile();
 			s.close();
 
-			return new Jocket(fr.reader(), fw.writer());
+			return new JocketSocket(fr.reader(), fw.writer());
 		}
 	}
 }

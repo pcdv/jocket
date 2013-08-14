@@ -10,17 +10,18 @@ import java.net.Socket;
 import jocket.impl.JocketReader;
 import jocket.impl.JocketWriter;
 
-public class Jocket {
+public class JocketSocket {
 
 	private final JocketReader reader;
 	private final JocketWriter writer;
 
-	public Jocket(JocketReader reader, JocketWriter writer) {
+	public JocketSocket(JocketReader reader, JocketWriter writer) {
 		this.reader = reader;
 		this.writer = writer;
+		new CloseObserver(reader, writer);
 	}
 
-	public Jocket(int port) throws IOException {
+	public JocketSocket(int port) throws IOException {
 		Socket s = new Socket(InetAddress.getLoopbackAddress(), port);
 		DataOutputStream out = new DataOutputStream(s.getOutputStream());
 		out.writeInt(ServerJocket.MAGIC);
@@ -29,8 +30,8 @@ public class Jocket {
 		File r = new File(in.readUTF());
 		File w = new File(in.readUTF());
 
-		JocketFactory jfr = new JocketFactory(r, false);
-		JocketFactory jfw = new JocketFactory(w, false);
+		JocketFile jfr = new JocketFile(r, false);
+		JocketFile jfw = new JocketFile(w, false);
 
 		jfr.deleteFile();
 		jfw.deleteFile();
@@ -51,8 +52,7 @@ public class Jocket {
 	}
 
 	public void close() {
-		// TODO Auto-generated method stub
-
+		reader.close();
 	}
 
 }
