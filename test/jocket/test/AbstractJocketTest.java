@@ -1,5 +1,6 @@
 package jocket.test;
 
+import java.io.EOFException;
 import java.nio.ByteBuffer;
 
 import jocket.impl.Const;
@@ -41,12 +42,12 @@ public class AbstractJocketTest {
 		return total;
 	}
 
-	protected String read() {
+	protected String read() throws EOFException {
 		byte[] buf = new byte[readBufSize];
 		return read(buf, 0, buf.length);
 	}
 
-	protected String read(byte[] buf, int off, int len) {
+	protected String read(byte[] buf, int off, int len) throws EOFException {
 		return new String(buf, off, r.read(buf, off, len));
 	}
 }

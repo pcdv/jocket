@@ -58,4 +58,8 @@ public class ServerJocket implements Closeable {
 			return new JocketSocket(fr.reader(), fw.writer());
 		}
 	}
+
+	public int getLocalPort() {
+		return srv.getLocalPort();
+	}
 }
