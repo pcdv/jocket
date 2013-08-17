@@ -18,12 +18,21 @@ public class JocketWriter extends AbstractJocketBuffer {
 		super(buf, npackets);
 	}
 
-	public int write(byte[] data, int off, int len) {
-		if (checkClosedState())
-			throw new IllegalStateException("Closed");
+	@Override
+	protected void close0() {
+		buf.putInt(WSEQ, -1);
+		writeMemoryBarrier();
+	}
 
+	public int write(byte[] data, int off, int len) {
 		readMemoryBarrier();
 		final int rseq = rseq();
+		if (rseq < 0)
+			close();
+
+		if (isClosed())
+			throw new IllegalStateException("Closed");
+
 		// cannot write if all packets are written and the reader didn't read them
 		if (wseq - rseq >= npackets)
 			return 0;

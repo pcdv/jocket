@@ -1,5 +1,6 @@
 package jocket.impl;
 
+import java.io.EOFException;
 import java.nio.ByteBuffer;
 
 public class JocketReader extends AbstractJocketBuffer {
@@ -10,18 +11,27 @@ public class JocketReader extends AbstractJocketBuffer {
 		super(buf, npackets);
 	}
 
-	public int read(byte[] data) {
+	@Override
+	protected void close0() {
+		buf.putInt(RSEQ, -1);
+		writeMemoryBarrier();
+	}
+
+	public int read(byte[] data) throws EOFException {
 		return read(data, 0, data.length);
 	}
 
-	public int read(byte[] data, int off, int len) {
-
-		if (checkClosedState())
-			throw new IllegalStateException("Closed");
-
+	public int read(byte[] data, int off, int len) throws EOFException {
 		int wseq = buf.getInt(WSEQ);
+		if (wseq < 0)
+			close();
+
+		if (isClosed())
+			return -1;
+
 		if (wseq <= rseq)
 			return 0;
+
 		int index = rseq & packetMask;
 		int position = buf.getInt(PACKET_INFO + index * LEN_PACKET_INFO);
 		int available = buf.getInt(PACKET_INFO + index * LEN_PACKET_INFO + 4);

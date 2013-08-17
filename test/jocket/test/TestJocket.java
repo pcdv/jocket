@@ -10,7 +10,7 @@ public class TestJocket extends AbstractJocketTest {
 	 * Basic test case: write data and read it back.
 	 */
 	@Test
-	public void testBasic() {
+	public void testBasic() throws Exception {
 		init(4, 128);
 		byte[] data = new byte[10];
 		assertEquals(0, r.read(data, 0, data.length));

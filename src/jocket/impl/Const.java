@@ -19,6 +19,7 @@ public interface Const {
 	 */
 	int RSEQ = WSEQ + _CACHELINE;
 
+	@Deprecated
 	int CLOSE_FLAG = RSEQ + _CACHELINE;
 
 	/**

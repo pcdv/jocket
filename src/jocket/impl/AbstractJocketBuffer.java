@@ -71,21 +71,15 @@ public abstract class AbstractJocketBuffer implements Const {
 	public void close() {
 		if (!closed) {
 			closed = true;
-			buf.put(CLOSE_FLAG, (byte) 1);
+			close0();
 			closeObservable.notifyObservers();
 		}
 	}
 
-	public boolean checkClosedState() {
-		if (closed)
-			return true;
-		readMemoryBarrier();
-		if (buf.get(CLOSE_FLAG) != 0) {
-			closed = true;
-			closeObservable.notifyObservers();
-			return true;
-		}
-		return false;
+	protected abstract void close0();
+
+	public boolean isClosed() {
+		return closed;
 	}
 
 	public void addCloseListener(Observer lis) {

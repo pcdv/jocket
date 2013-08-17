@@ -23,7 +23,7 @@ public class TestServer {
 			@Override
 			public void run() {
 				try {
-					new ReadLoop(s.getReader(), System.out);
+					new ReadLoop(s.getInputStream(), System.out);
 				} catch (IOException e) {
 					s.close();
 				}
@@ -34,7 +34,7 @@ public class TestServer {
 			@Override
 			public void run() {
 				try {
-					new WriteLoop(s.getWriter(), System.in);
+					new WriteLoop(s.getOutputStream(), System.in);
 				} catch (IOException e) {
 					s.close();
 				}
