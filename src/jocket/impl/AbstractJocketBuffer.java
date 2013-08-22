@@ -1,8 +1,6 @@
 package jocket.impl;
 
 import java.nio.ByteBuffer;
-import java.util.Observable;
-import java.util.Observer;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -38,12 +36,6 @@ public abstract class AbstractJocketBuffer implements Const {
 
 	protected final int dataOffset;
 
-	private final Observable closeObservable = new Observable() {
-		{
-			setChanged();
-		}
-	};
-
 	private boolean closed;
 
 	public AbstractJocketBuffer(ByteBuffer buf, int npackets) {
@@ -72,7 +64,6 @@ public abstract class AbstractJocketBuffer implements Const {
 		if (!closed) {
 			closed = true;
 			close0();
-			closeObservable.notifyObservers();
 		}
 	}
 
@@ -80,9 +71,5 @@ public abstract class AbstractJocketBuffer implements Const {
 
 	public boolean isClosed() {
 		return closed;
-	}
-
-	public void addCloseListener(Observer lis) {
-		closeObservable.addObserver(lis);
 	}
 }
