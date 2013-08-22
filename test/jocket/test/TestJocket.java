@@ -27,8 +27,11 @@ public class TestJocket extends AbstractJocketTest {
 		init(128, 8);
 		assertEquals(5, write0("11111"));
 		assertEquals(3, write0("22222"));
-		assertEquals(0, r.available());
-		w.flush();
+
+		// flush is now automatic when reaching end of buffer
+		// assertEquals(0, r.available());
+		// w.flush();
+
 		assertEquals(8, r.available());
 		assertEquals("11111222", read());
 	}
@@ -128,5 +131,33 @@ public class TestJocket extends AbstractJocketTest {
 		assertEquals("0123456789", read());
 		assertEquals("01", read());
 		assertEquals("AB", read());
+	}
+
+	@Test
+	public void testWrap() throws Exception {
+		init(128, 8);
+		assertEquals(6, write("ABCDEF"));
+		assertEquals("AB", read(new byte[2], 0, 2));
+		assertEquals(2, write("GHIJKL"));
+		assertEquals("CDEF", read());
+		assertEquals("GH", read());
+	}
+
+	/**
+	 * Reproduced bug when writing (without flushing) data at the end of data
+	 * buffer, and flushing only after writing some additional bytes.
+	 */
+	@Test
+	public void testWrap2() throws Exception {
+		init(128, 8);
+		assertEquals(6, write("ABCDEF"));
+		assertEquals("ABCDEF", read());
+
+		// overflow buffer
+		assertEquals(2, write(false, "GHIJKL"));
+		assertEquals(4, write("IJKL"));
+
+		assertEquals("GH", read());
+		assertEquals("IJKL", read());
 	}
 }
