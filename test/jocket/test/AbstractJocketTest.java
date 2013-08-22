@@ -24,10 +24,20 @@ public class AbstractJocketTest {
 		}
 	}
 
+	/**
+	 * Writes strings, flushing after each of them.
+	 * 
+	 * @return number of bytes successfully written
+	 */
 	protected int write(String... strs) {
 		return write(true, strs);
 	}
 
+	/**
+	 * Writes strings without flushing.
+	 * 
+	 * @return number of bytes successfully written
+	 */
 	protected int write0(String... strs) {
 		return write(false, strs);
 	}
