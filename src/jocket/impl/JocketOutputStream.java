@@ -32,6 +32,7 @@ public class JocketOutputStream extends OutputStream {
 			if (len > 0)
 				wait.pause();
 		}
+		wait.reset();
 	}
 
 	@Override
