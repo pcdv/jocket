@@ -2,6 +2,7 @@ package jocket.test;
 
 import static junit.framework.Assert.assertEquals;
 
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
@@ -54,5 +55,19 @@ public class TestJocketSocket {
 	public void testClose() throws Exception {
 		c.getOutputStream().close();
 		assertEquals(-1, s.getInputStream().read());
+	}
+
+	/**
+	 * Used to reproduce a bug.
+	 */
+	@Test
+	public void testUnderflow() throws Exception {
+		byte[] buf = new byte[300000];
+		for (int i = 0; i < 100; i++) {
+			System.out.println(i);
+			c.getOutputStream().write(buf);
+			c.getWriter().flush();
+			new DataInputStream(s.getInputStream()).readFully(buf);
+		}
 	}
 }
