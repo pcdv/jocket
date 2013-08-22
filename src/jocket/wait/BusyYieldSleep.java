@@ -2,7 +2,6 @@ package jocket.wait;
 
 import java.util.concurrent.locks.LockSupport;
 
-
 public class BusyYieldSleep implements WaitStrategy {
 
 	int counter;
@@ -13,14 +12,18 @@ public class BusyYieldSleep implements WaitStrategy {
 			return;
 		if (counter < 200)
 			Thread.yield();
-		if (counter < 300)
+		if (counter < 20000)
 			LockSupport.parkNanos(1000);
 		else {
-			counter = 0;
 			try {
 				Thread.sleep(1);
 			} catch (InterruptedException e) {
 			}
 		}
+	}
+
+	@Override
+	public void reset() {
+		counter = 0;
 	}
 }
