@@ -29,7 +29,7 @@ public class JocketInputStream extends InputStream {
 			if (len < 0)
 				return len;
 		} while (len == 0);
-		return buf[0];
+		return buf[0] & 0xff;
 	}
 
 	@Override
@@ -37,8 +37,10 @@ public class JocketInputStream extends InputStream {
 		int read;
 		do {
 			read = reader.read(b, off, len);
-			if (read != 0)
+			if (read != 0) {
+				wait.reset();
 				return read;
+			}
 			wait.pause();
 		} while (read == 0);
 		return -1;
