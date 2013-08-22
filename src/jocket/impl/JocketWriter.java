@@ -46,6 +46,11 @@ public class JocketWriter extends AbstractJocketBuffer {
 			buf.position(dataOffset + (head & dataMask));
 			buf.put(data, off, bytes);
 			dirty = true;
+
+			// TODO: optimize
+			// always flush when reaching end of buffer
+			if ((pstart & dataMask) + plen == capacity)
+				flush();
 		}
 		return bytes;
 	}
