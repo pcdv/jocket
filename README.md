@@ -1,10 +1,9 @@
-jocket
+Jocket
 ======
 
 Faster java.net.Socket alternative using shared memory.
 
-
-Jocket is built around a concept of shared buffer, in which a writer writes data and a reader reads it. 
+Jocket is built around a concept of shared buffer, in which a JocketWriter pushes data and that a JocketReader can read.
 
 The reader and writer can be:
  - in the same process: allows to transfer efficiently a stream of bytes from a thread to another
@@ -33,7 +32,10 @@ Jocket is young and still in progress. It probably contains bugs and the API is 
 
 However it is already working and very fast. 
 
-On my (old) laptop, roundtrip-time for sending an int and receiving back 1kb of data takes 4-14us with Jocket and ~100us with TCP.
+On my (old) linux laptop, roundtrip-time for sending an int and receiving back 1kb of data takes 4-14us with Jocket and ~100us with TCP.
 
 
+Credits
+-------
 
+This project takes some ideas from @mjpt777 and @peter-lawrey
