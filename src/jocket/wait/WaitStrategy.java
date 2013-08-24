@@ -8,15 +8,15 @@ package jocket.wait;
  */
 public interface WaitStrategy {
 
-	/**
-	 * Pauses for some time.
-	 */
-	void pause();
+  /**
+   * Pauses for some time.
+   */
+  void pause();
 
-	/**
-	 * Resets the strategy. Called when data has been read or written
-	 * successfully.
-	 */
-	void reset();
+  /**
+   * Resets the strategy. Called when data has been read or written
+   * successfully.
+   */
+  void reset();
 
 }
