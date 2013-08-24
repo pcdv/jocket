@@ -25,12 +25,15 @@ InputStream in = sock.getInputStream();
 OutputStream out = sock.getOutputStream();
 ```
 
+Otherwise, Jocket readers and writers have their own API allowing to perform non-blocking read/writes, potentially faster than with input/output streams.
+
+
 Status
 ------
 
 Jocket is young and still in progress. It probably contains bugs and the API is not stable.
 
-However it is already working and very fast. 
+However it is already working and is quite fast. 
 
 On my (old) linux laptop, roundtrip-time for sending an int and receiving back 1kb of data takes 4-14us with Jocket and ~100us with TCP.
 
