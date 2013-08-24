@@ -11,55 +11,55 @@ import java.net.Socket;
 
 public class ServerJocket implements Closeable {
 
-	static final int MAGIC = 0x50C4E7;
-	private final ServerSocket srv;
-	private boolean closed;
+  static final int MAGIC = 0x50C4E7;
+  private final ServerSocket srv;
+  private boolean closed;
 
-	public ServerJocket(int port) throws IOException {
-		srv = new ServerSocket();
-		srv.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
-	}
+  public ServerJocket(int port) throws IOException {
+    srv = new ServerSocket();
+    srv.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
+  }
 
-	@Override
+  @Override
   public void close() throws IOException {
-		closed = true;
-		srv.close();
-	}
+    closed = true;
+    srv.close();
+  }
 
-	public JocketSocket accept() throws IOException {
-		while (true) {
+  public JocketSocket accept() throws IOException {
+    while (true) {
 
-			if (closed)
-				throw new IllegalStateException("Closed");
+      if (closed)
+        throw new IllegalStateException("Closed");
 
-			Socket s = srv.accept();
-			DataInputStream in = new DataInputStream(s.getInputStream());
-			int magic = in.readInt();
+      Socket s = srv.accept();
+      DataInputStream in = new DataInputStream(s.getInputStream());
+      int magic = in.readInt();
 
-			if (magic != MAGIC) {
-				s.close();
-				continue;
-			}
+      if (magic != MAGIC) {
+        s.close();
+        continue;
+      }
 
-			// TODO: make parameters configurable through ServerJocket
-			// TODO: write parameters in file header (+ misc meta data)
-			JocketFile fw = new JocketFile();
-			JocketFile fr = new JocketFile();
+      // TODO: make parameters configurable through ServerJocket
+      // TODO: write parameters in file header (+ misc meta data)
+      JocketFile fw = new JocketFile();
+      JocketFile fr = new JocketFile();
 
-			DataOutputStream out = new DataOutputStream(s.getOutputStream());
-			out.writeUTF(fw.getPath());
-			out.writeUTF(fr.getPath());
+      DataOutputStream out = new DataOutputStream(s.getOutputStream());
+      out.writeUTF(fw.getPath());
+      out.writeUTF(fr.getPath());
 
-			in.readInt();
-			fw.deleteFile();
-			fr.deleteFile();
-			s.close();
+      in.readInt();
+      fw.deleteFile();
+      fr.deleteFile();
+      s.close();
 
-			return new JocketSocket(fr.reader(), fw.writer());
-		}
-	}
+      return new JocketSocket(fr.reader(), fw.writer());
+    }
+  }
 
-	public int getLocalPort() {
-		return srv.getLocalPort();
-	}
+  public int getLocalPort() {
+    return srv.getLocalPort();
+  }
 }
