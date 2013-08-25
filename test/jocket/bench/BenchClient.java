@@ -1,6 +1,5 @@
 package jocket.bench;
 
-import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.FileOutputStream;
@@ -16,6 +15,7 @@ import jocket.net.JocketSocket;
  * 
  * @author pcdv
  */
+@SuppressWarnings("resource")
 public class BenchClient {
 
   private final int niter;
@@ -40,7 +40,7 @@ public class BenchClient {
   }
 
   private void initJocket() throws IOException {
-    fileName = "Jocket";
+    fileName = "/tmp/Jocket";
     JocketSocket s = new JocketSocket(port);
     in = new DataInputStream(s.getInputStream());
     out = new DataOutputStream(s.getOutputStream());
@@ -48,34 +48,48 @@ public class BenchClient {
   }
 
   private void initSocket() throws IOException {
-    fileName = "Socket";
-    @SuppressWarnings("resource")
+    fileName = "/tmp/Socket";
     Socket s = new Socket("localhost", port);
     s.setTcpNoDelay(true);
     in = new DataInputStream(s.getInputStream());
-    out = new DataOutputStream(new BufferedOutputStream(s.getOutputStream()));
+    out = new DataOutputStream(s.getOutputStream());
     buf = new byte[datasize];
   }
 
   public void bench() throws IOException {
+    long time = System.currentTimeMillis();
+    System.out.println("Starting " + niter + " iterations");
     out.writeInt(niter);
     out.flush();
     for (int i = 0; i < niter; i++) {
       iter(i);
     }
-    dumpResults(new FileOutputStream("/tmp/" + fileName));
+    time = System.currentTimeMillis() - time;
+    System.out
+        .println("Done in " + time + "ms. Dumping results in " + fileName);
+    dumpResults(new FileOutputStream(fileName));
   }
 
   public void iter(int i) throws IOException {
-    // if (i % 1000 == 0)
-    // System.out.println(i);
     long start = System.nanoTime();
-    out.writeInt(datasize);
-    // out.write(buf, 0, datasize);
+
+    // send request
+    writeInt(out, datasize);
     out.flush();
+
+    // read response
     in.readFully(buf, 0, datasize);
-    long stop = System.nanoTime();
-    nanos[i] = stop - start;
+
+    nanos[i] = System.nanoTime() - start;
+  }
+
+  private void writeInt(OutputStream out, int v) throws IOException {
+    byte[] buf = this.buf;
+    buf[0] = (byte) (v >>> 24);
+    buf[1] = (byte) (v >>> 16);
+    buf[2] = (byte) (v >>> 8);
+    buf[3] = (byte) (v >>> 0);
+    out.write(buf, 0, 4);
   }
 
   private void dumpResults(OutputStream out) throws IOException {
@@ -88,7 +102,7 @@ public class BenchClient {
   }
 
   public static void main(String[] args) throws IOException {
-    int iters = 50000, data = 1024;
+    int iters = 100000, data = 1024;
     int port = Integer.parseInt(args[0]);
     boolean jock = args[1].equals("jocket");
     new BenchClient(iters, data, jock, port).bench();

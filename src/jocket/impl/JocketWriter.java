@@ -57,9 +57,9 @@ public class JocketWriter extends AbstractJocketBuffer {
 
   public void flush() {
     if (dirty) {
-      final int idx = wseq & packetMask;
-      buf.putInt(PACKET_INFO + idx * LEN_PACKET_INFO, pstart);
-      buf.putInt(PACKET_INFO + idx * LEN_PACKET_INFO + 4, plen);
+      int pkt = PACKET_INFO + (wseq & packetMask) * LEN_PACKET_INFO;
+      buf.putInt(pkt, pstart);
+      buf.putInt(pkt + 4, plen);
       buf.putInt(WSEQ, ++wseq);
       pstart += plen;
       plen = 0;
@@ -83,11 +83,9 @@ public class JocketWriter extends AbstractJocketBuffer {
     if (wseq == rseq)
       return 0;
 
-    final int idx = (wseq - 1) & packetMask;
+    final int pkt = PACKET_INFO + ((wseq - 1) & packetMask) * LEN_PACKET_INFO;
 
-    return ( //
-    buf.getInt(PACKET_INFO + idx * LEN_PACKET_INFO) + //
-    buf.getInt(PACKET_INFO + idx * LEN_PACKET_INFO + 4));
+    return (buf.getInt(pkt) + buf.getInt(pkt + 4));
   }
 
   /**

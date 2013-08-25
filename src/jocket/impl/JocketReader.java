@@ -33,8 +33,9 @@ public class JocketReader extends AbstractJocketBuffer {
       return 0;
 
     int index = rseq & packetMask;
-    int position = buf.getInt(PACKET_INFO + index * LEN_PACKET_INFO);
-    int available = buf.getInt(PACKET_INFO + index * LEN_PACKET_INFO + 4);
+    int pktInfo = PACKET_INFO + index * LEN_PACKET_INFO;
+    int position = buf.getInt(pktInfo);
+    int available = buf.getInt(pktInfo + 4);
 
     // if the whole packet can be read
     if (available <= len) {
@@ -52,8 +53,8 @@ public class JocketReader extends AbstractJocketBuffer {
       buf.get(data, off, len);
 
       // update packet info to make space available for writer
-      buf.putInt(PACKET_INFO + index * LEN_PACKET_INFO, position + len);
-      buf.putInt(PACKET_INFO + index * LEN_PACKET_INFO + 4, available - len);
+      buf.putInt(pktInfo, position + len);
+      buf.putInt(pktInfo + 4, available - len);
       writeMemoryBarrier();
       return len;
     }

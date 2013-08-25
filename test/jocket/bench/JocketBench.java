@@ -105,7 +105,7 @@ public class JocketBench {
     for (int i = 0; i < niter; i++) {
       iter(i);
     }
-    dumpResults(new FileOutputStream("/tmp/" + fileName));
+    dumpLatencyMicros(new FileOutputStream("/tmp/" + fileName));
   }
 
   public void iter(int i) throws IOException {
@@ -120,7 +120,7 @@ public class JocketBench {
     nanos[i] = stop - start;
   }
 
-  private void dumpResults(OutputStream out) throws IOException {
+  private void dumpLatencyMicros(OutputStream out) throws IOException {
     PrintWriter w = new PrintWriter(out);
     for (int i = 0; i < nanos.length; i++) {
       w.println(nanos[i] / 1000.0);
