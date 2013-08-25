@@ -31,11 +31,15 @@ Otherwise, Jocket readers and writers have their own API allowing to perform non
 Status
 ------
 
-Jocket is young and still in progress. It probably contains bugs and the API is not stable.
+Jocket is young and still in progress.
 
-However it is already working and is quite fast. 
+Current benchmarks show a 10-50x performance improvement when compared to a standard socket.
 
-On my (old) linux laptop, roundtrip-time for sending an int and receiving back 1kb of data takes 4-14us with Jocket and ~100us with TCP.
+The following chart displays the RTT latency (in microseconds) between two processes:
+ - the client sends a PING request (payload = 4 bytes)
+ - the server replies with a PONG response (payload = 1024 bytes)
+
+![alt text](docs/bench.png "Latency for an 1kb PING. Red = Socket, green = Jocket")
 
 
 Credits
