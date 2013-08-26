@@ -1,9 +1,38 @@
 Jocket
 ======
 
-Faster java.net.Socket alternative using shared memory.
+Fast java.net.Socket alternative using shared memory.
 
-Jocket is built around a concept of shared buffer, in which a JocketWriter pushes data and that a JocketReader can read.
+
+Status
+------
+
+Jocket is young and still in progress.
+
+Current benchmarks show a 10-50x performance improvement when compared to a standard socket.
+
+The following chart displays the RTT latency (in microseconds) between two processes:
+ - the client sends a PING request (payload = 4 bytes)
+ - the server replies with a PONG response (payload = 1024 bytes)
+
+![alt text](docs/bench.png "Latency for an 1kb PING. Red = Socket, green = Jocket")
+
+
+NB: this benchmark has been run on an old single-core "holiday" laptop. I will update it with probably better results when I have access to my main computer.
+
+
+How it works
+------------
+
+Jocket is built around a concept of shared buffer, accessed by a reader and a writer object.
+
+`JocketWriter.write()` can be called several times to append data to the buffer. When `JocketWriter.flush()` is called, a packet is flushed and can immediately be read by `JocketReader.read()`.
+
+The buffer is bound by a double capacity:
+ - a maximum number of packets that can be written without being read
+ - a maximum number of bytes that can be written without being read
+
+When any of these limits is reached, `JocketWriter.write()` does nothing and returns zero. As soon as `JocketReader.read()` is called, it is again possible to write data.
 
 The reader and writer can be:
  - in the same process: allows to transfer efficiently a stream of bytes from a thread to another
@@ -26,20 +55,6 @@ OutputStream out = sock.getOutputStream();
 ```
 
 Otherwise, Jocket readers and writers have their own API allowing to perform non-blocking read/writes, potentially faster than with input/output streams.
-
-
-Status
-------
-
-Jocket is young and still in progress.
-
-Current benchmarks show a 10-50x performance improvement when compared to a standard socket.
-
-The following chart displays the RTT latency (in microseconds) between two processes:
- - the client sends a PING request (payload = 4 bytes)
- - the server replies with a PONG response (payload = 1024 bytes)
-
-![alt text](docs/bench.png "Latency for an 1kb PING. Red = Socket, green = Jocket")
 
 
 Credits
