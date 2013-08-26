@@ -3,42 +3,14 @@ package jocket.test;
 import static junit.framework.Assert.assertEquals;
 
 import java.io.DataInputStream;
-import java.io.IOException;
 import java.io.OutputStream;
 
-import jocket.net.JocketSocket;
-import jocket.net.ServerJocket;
+import jocket.impl.ClosedException;
+import junit.framework.Assert;
 
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 
-public class TestJocketSocket {
-  private JocketSocket c;
-  private volatile JocketSocket s;
-  private ServerJocket srv;
-
-  @Before
-  public void setUp() throws Exception {
-    srv = new ServerJocket(0);
-    new Thread() {
-      @Override
-      public void run() {
-        try {
-          s = srv.accept();
-        } catch (IOException e) {
-        }
-      }
-    }.start();
-    c = new JocketSocket(srv.getLocalPort());
-    while (s == null)
-      Thread.sleep(1);
-  }
-
-  @After
-  public void tearDown() throws Exception {
-    srv.close();
-  }
+public class TestJocketSocket extends AbstractJocketSocketTest {
 
   @Test
   public void testWriteRead() throws Exception {
@@ -52,9 +24,19 @@ public class TestJocketSocket {
   }
 
   @Test
-  public void testClose() throws Exception {
+  public void testCloseOutput() throws Exception {
     c.getOutputStream().close();
     assertEquals(-1, s.getInputStream().read());
+  }
+
+  @Test
+  public void testCloseInput() throws Exception {
+    c.getInputStream().close();
+    try {
+      s.getOutputStream().write(22);
+      Assert.fail("");
+    } catch (ClosedException e) {
+    }
   }
 
   /**
