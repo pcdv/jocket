@@ -69,7 +69,7 @@ public abstract class AbstractJocketBuffer implements Const {
 
   protected abstract void close0();
 
-  public boolean isClosed() {
+  public final boolean isClosed() {
     return closed;
   }
 }

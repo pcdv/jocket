@@ -21,11 +21,11 @@ public class JocketInputStream extends InputStream {
   }
 
   @Override
-  public int read() throws IOException {
+  public int read() {
     byte[] buf = new byte[1];
     int len;
     do {
-      len = read(buf);
+      len = read(buf, 0, 1);
       if (len < 0)
         return len;
     } while (len == 0);
@@ -33,17 +33,17 @@ public class JocketInputStream extends InputStream {
   }
 
   @Override
-  public int read(byte[] b, int off, int len) throws IOException {
-    int read;
-    do {
+  public int read(byte[] b, int off, int len) {
+    int read = 0;
+    for (;;) {
       read = reader.read(b, off, len);
       if (read != 0) {
         wait.reset();
-        return read;
-      }
-      wait.pause();
-    } while (read == 0);
-    return -1;
+        break;
+      } else
+        wait.pause();
+    }
+    return read;
   }
 
   @Override
