@@ -26,14 +26,12 @@ public class JocketOutputStream extends OutputStream {
 
   @Override
   public void write(byte[] b, int off, int len) {
-    for (;;) {
-      int written = writer.write(b, off, len);
+    while (len > 0) {
+      final int written = writer.write(b, off, len);
       len -= written;
       off += written;
-      if (len > 0)
+      if (written == 0)
         wait.pause();
-      else
-        break;
     }
     wait.reset();
   }
