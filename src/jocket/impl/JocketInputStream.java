@@ -26,10 +26,8 @@ public class JocketInputStream extends InputStream {
     int len;
     do {
       len = read(buf, 0, 1);
-      if (len < 0)
-        return len;
     } while (len == 0);
-    return buf[0] & 0xff;
+    return len < 0 ? len : buf[0] & 0xff;
   }
 
   @Override
@@ -50,5 +48,4 @@ public class JocketInputStream extends InputStream {
   public void close() throws IOException {
     reader.close();
   }
-
 }
