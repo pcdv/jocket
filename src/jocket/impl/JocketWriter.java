@@ -31,7 +31,7 @@ public class JocketWriter extends AbstractJocketBuffer {
       close();
 
     if (isClosed())
-      throw new IllegalStateException("Closed");
+      throw new ClosedException("Closed");
 
     // cannot write if all packets are written and the reader didn't read them
     if (wseq - rseq >= npackets)
