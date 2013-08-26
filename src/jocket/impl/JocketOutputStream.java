@@ -1,6 +1,5 @@
 package jocket.impl;
 
-import java.io.IOException;
 import java.io.OutputStream;
 
 import jocket.wait.BusyYieldSleep;
@@ -21,27 +20,31 @@ public class JocketOutputStream extends OutputStream {
   }
 
   @Override
-  public void write(int b) throws IOException {
+  public void write(int b) {
     write(new byte[] { (byte) b }, 0, 1);
   }
 
   @Override
-  public void write(byte[] b, int off, int len) throws IOException {
-    while (len > 0) {
-      len -= writer.write(b, off, len);
+  public void write(byte[] b, int off, int len) {
+    for (;;) {
+      int written = writer.write(b, off, len);
+      len -= written;
+      off += written;
       if (len > 0)
         wait.pause();
+      else
+        break;
     }
     wait.reset();
   }
 
   @Override
-  public void flush() throws IOException {
+  public void flush() {
     writer.flush();
   }
 
   @Override
-  public void close() throws IOException {
+  public void close() {
     writer.close();
   }
 }

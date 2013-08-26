@@ -1,6 +1,5 @@
 package jocket.impl;
 
-import java.io.EOFException;
 import java.nio.ByteBuffer;
 
 public class JocketReader extends AbstractJocketBuffer {
@@ -17,11 +16,11 @@ public class JocketReader extends AbstractJocketBuffer {
     writeMemoryBarrier();
   }
 
-  public int read(byte[] data) throws EOFException {
+  public int read(byte[] data) {
     return read(data, 0, data.length);
   }
 
-  public int read(byte[] data, int off, int len) throws EOFException {
+  public int read(byte[] data, int off, int len) {
     int wseq = buf.getInt(WSEQ);
     if (wseq < 0)
       close();
