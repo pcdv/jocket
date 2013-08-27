@@ -19,10 +19,12 @@ public interface Const {
    */
   int RSEQ = WSEQ + _CACHELINE;
 
+  int RESET = RSEQ + _CACHELINE;
+
   /**
    * Position at which packet information starts.
    */
-  int PACKET_INFO = RSEQ + _CACHELINE;
+  int PACKET_INFO = RESET + _CACHELINE;
 
   /**
    * Length of data describing a packet. Two ints: position and length. Padded

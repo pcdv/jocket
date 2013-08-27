@@ -36,6 +36,8 @@ public abstract class AbstractJocketBuffer implements Const {
 
   protected final int dataOffset;
 
+  protected int resetSeqNum = Integer.MAX_VALUE >> 1;
+
   private boolean closed;
 
   public AbstractJocketBuffer(ByteBuffer buf, int npackets) {
@@ -71,5 +73,9 @@ public abstract class AbstractJocketBuffer implements Const {
 
   public final boolean isClosed() {
     return closed;
+  }
+
+  public void setResetSeqNum(int resetSeqNum) {
+    this.resetSeqNum = resetSeqNum;
   }
 }

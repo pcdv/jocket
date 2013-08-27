@@ -26,12 +26,15 @@ public class JocketWriter extends AbstractJocketBuffer {
 
   public int write(byte[] data, int off, int len) {
     readMemoryBarrier();
-    final int rseq = rseq();
+    int rseq = rseq();
     if (rseq < 0)
       close();
 
     if (isClosed())
       throw new ClosedException("Closed");
+
+    if (rseq == wseq && rseq > 0 && !dirty)
+      rseq = checkReset(rseq);
 
     // cannot write if all packets are written and the reader didn't read them
     if (wseq - rseq >= npackets)
@@ -53,6 +56,20 @@ public class JocketWriter extends AbstractJocketBuffer {
         flush();
     }
     return bytes;
+  }
+
+  private int checkReset(int rseq) {
+    pstart = 0;
+
+    if (wseq > resetSeqNum && buf.get(RESET) == 0) {
+      System.out.println("Resetting seqnum at " + rseq);
+      wseq = 0;
+      rseq = 0;
+      buf.putInt(WSEQ, 0);
+      buf.putInt(RSEQ, 0);
+      buf.put(RESET, (byte) 1);
+    }
+    return rseq;
   }
 
   public void flush() {
@@ -143,5 +160,13 @@ public class JocketWriter extends AbstractJocketBuffer {
     if (wseq - rseq >= npackets)
       return 0;
     return getAvailableSpace(rseq, head(rseq));
+  }
+
+  public int getSeqNum() {
+    return wseq;
+  }
+
+  public int getPosition() {
+    return head(rseq());
   }
 }

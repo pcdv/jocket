@@ -21,12 +21,19 @@ public class JocketReader extends AbstractJocketBuffer {
   }
 
   public int read(byte[] data, int off, int len) {
+    readMemoryBarrier();
+
+    checkResetFlag();
     int wseq = buf.getInt(WSEQ);
+
     if (wseq < 0)
       close();
 
     if (isClosed())
       return -1;
+
+    // if (wseq == 0 && rseq > 0)
+    // rseq = 0;
 
     if (wseq <= rseq)
       return 0;
@@ -60,7 +67,21 @@ public class JocketReader extends AbstractJocketBuffer {
 
   }
 
+  private void checkResetFlag() {
+
+    // int old = rseq;
+    if (rseq > resetSeqNum && buf.get(RESET) == 1) {
+      System.out.println("Got seqnum reset at " + rseq);
+      rseq = 0;
+      buf.put(RESET, (byte) 0);
+      // writeMemoryBarrier();
+    }
+  }
+
   public int available() {
+    readMemoryBarrier();
+
+    checkResetFlag();
     int wseq = buf.getInt(WSEQ);
     if (wseq <= rseq)
       return 0;
