@@ -5,6 +5,7 @@ import static junit.framework.Assert.assertTrue;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.Random;
@@ -64,5 +65,30 @@ public class TestDataConsistency extends AbstractJocketSocketTest {
       res[i] = (byte) random.nextInt(256);
 
     return res;
+  }
+
+  @Test
+  public void testReproduceAutoResetBug() throws Exception {
+    final OutputStream out = s.getOutputStream();
+    final int ITER = 10000;
+    new Thread() {
+      @Override
+      public void run() {
+        try {
+          for (int i = 0; i < ITER; i++) {
+            out.write(i);
+            out.flush();
+          }
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+      }
+    }.start();
+
+    InputStream in = c.getInputStream();
+    for (int i = 0; i < ITER; i++) {
+      assertEquals(i % 256, in.read());
+    }
+
   }
 }
