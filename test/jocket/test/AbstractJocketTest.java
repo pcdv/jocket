@@ -1,5 +1,7 @@
 package jocket.test;
 
+import static junit.framework.Assert.assertEquals;
+
 import java.io.EOFException;
 import java.nio.ByteBuffer;
 
@@ -50,6 +52,12 @@ public class AbstractJocketTest {
         w.flush();
     }
     return total;
+  }
+
+  public void read(String... str) throws EOFException {
+    for (String s : str) {
+      assertEquals(s, read());
+    }
   }
 
   protected String read() throws EOFException {

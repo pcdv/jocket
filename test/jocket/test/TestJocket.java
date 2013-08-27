@@ -151,13 +151,60 @@ public class TestJocket extends AbstractJocketTest {
   public void testWrap2() throws Exception {
     init(128, 8);
     assertEquals(6, write("ABCDEF"));
-    assertEquals("ABCDEF", read());
 
     // overflow buffer
     assertEquals(2, write(false, "GHIJKL"));
+    assertEquals("ABCDEF", read());
     assertEquals(4, write("IJKL"));
 
     assertEquals("GH", read());
     assertEquals("IJKL", read());
   }
+
+  @Test
+  public void testAutoReset() throws Exception {
+    init(128, 8);
+    r.setResetSeqNum(0);
+    w.setResetSeqNum(0);
+
+    // write and read data
+    write("ABC");
+    read("ABC");
+
+    // buffer should be reset during next write
+    write("Z");
+    assertEquals(1, w.getSeqNum());
+    assertEquals(1, w.getPosition());
+
+    read("Z");
+  }
+
+  @Test
+  public void testAutoReset2() throws Exception {
+    init(128, 8);
+    r.setResetSeqNum(0);
+    w.setResetSeqNum(0);
+
+    // write and read data
+    write("ABC");
+    assertEquals(1, w.getSeqNum());
+    assertEquals(3, w.getPosition());
+    read("ABC");
+
+    // buffer should be reset during next write
+    write("Z");
+    assertEquals(1, w.getSeqNum());
+    assertEquals(1, w.getPosition());
+    write("X");
+    assertEquals(2, w.getSeqNum());
+    assertEquals(2, w.getPosition());
+    write("Y");
+    assertEquals(3, w.getSeqNum());
+    assertEquals(3, w.getPosition());
+
+    read("Z");
+    read("X");
+    read("Y");
+  }
+
 }
