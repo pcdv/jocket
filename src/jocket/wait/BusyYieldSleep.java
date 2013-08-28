@@ -11,9 +11,9 @@ public class BusyYieldSleep implements WaitStrategy {
     int counter = this.counter++;
     if (counter < 10000)
       return;
-    if (counter < 12000)
+    else if (counter < 20000)
       Thread.yield();
-    if (counter < 100000)
+    else if (counter < 500000)
       LockSupport.parkNanos(10);
     else {
       try {
