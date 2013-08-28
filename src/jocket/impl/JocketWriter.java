@@ -4,12 +4,10 @@ import java.nio.ByteBuffer;
 
 public final class JocketWriter extends AbstractJocketBuffer {
 
-  /**
-   * The sequence number of the next packet to write. Accessed only by the
-   * writer thread.
-   */
+  /** The sequence number of the next packet to write. */
   private int wseq;
 
+  /** Current (not flushed) packet's start and end absolute position. */
   private int pstart, pend;
 
   public JocketWriter(ByteBuffer buf, int npackets) {
@@ -69,28 +67,22 @@ public final class JocketWriter extends AbstractJocketBuffer {
   }
 
   /**
-   * Returns the position immediately after the last written bytes. Warning: the
-   * result can be equal to <code>capacity</code>, which is not equivalent to
-   * <code>0</code> because it means that data was written at the end of buffer.
-   * However, if there is space in the buffer, data must be written at position
-   * <code>0</code> (as it is a circular buffer).
+   * Returns the absolute position of the last read byte.
    * 
-   * @param rseq the reader's sequence number. It is required because it allows
-   *          to determine whether all data has been read, in which case the new
-   *          head is 0 whatever the current state of packets
+   * @param rseq reader sequence number.
    */
   private int head(int rseq) {
-    // if all packets are read, we can start at 0
+    // if all packets are read, the position has been or will be reset
     if (wseq == rseq)
       return 0;
 
     final int pkt = PACKET_INFO + ((wseq - 1) & packetMask) * LEN_PACKET_INFO;
 
-    return (buf.getInt(pkt) + buf.getInt(pkt + 4));
+    return buf.getInt(pkt) + buf.getInt(pkt + 4);
   }
 
   /**
-   * Returns the address at which specified packet starts.
+   * Returns the absolute position of specified packet.
    * 
    * @param seq a packet number
    */
@@ -100,20 +92,27 @@ public final class JocketWriter extends AbstractJocketBuffer {
 
   /**
    * Returns how many bytes can be written in one single chunk at current
-   * position. There are two cases:
+   * position. We can be limited either by the bounds of the ByteBuffer or by
+   * how many bytes must still be read.
+   * <p>
+   * Result is (X - head) where X is the smallest of:
    * <ul>
-   * <li><b>head &gt; tail</b>: result = capacity - (head - tail)
-   * <li><b>head &lt; tail</b>: result = tail - head
+   * <li>head + capacity - (head - head % capacity)
+   * <li>tail + capacity
    * </ul>
    * 
-   * @param rseq current seqnum of the reader
-   * @param head current data head
+   * @param rseq sequence number of reader
+   * @param head position of last written byte
    */
   private int getAvailableSpace(int rseq, int head) {
     return Math.min(start(rseq), head - (head & dataMask)) + capacity - head;
   }
 
-  private int rseq() {
+  /**
+   * Returns the reader sequence number. Call must be preceded by a read memory
+   * barrier.
+   */
+  private final int rseq() {
     return buf.getInt(RSEQ);
   }
 
