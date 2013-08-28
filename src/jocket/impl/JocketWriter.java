@@ -2,7 +2,7 @@ package jocket.impl;
 
 import java.nio.ByteBuffer;
 
-public class JocketWriter extends AbstractJocketBuffer {
+public final class JocketWriter extends AbstractJocketBuffer {
 
   /**
    * The sequence number of the next packet to write. Accessed only by the
@@ -10,77 +10,61 @@ public class JocketWriter extends AbstractJocketBuffer {
    */
   private int wseq;
 
-  private int pstart, plen;
-
-  private boolean dirty;
+  private int pstart, pend;
 
   public JocketWriter(ByteBuffer buf, int npackets) {
     super(buf, npackets);
   }
 
-  @Override
-  protected void close0() {
-    buf.putInt(WSEQ, -1);
-    writeMemoryBarrier();
-  }
-
-  public int write(byte[] data, int off, int len) {
+  public int write(final byte[] data, final int off, final int len) {
     readMemoryBarrier();
-    int rseq = rseq();
-    if (rseq < 0)
+    final int rseq = rseq();
+    final int wseq = this.wseq;
+
+    if (rseq == wseq) {
+      if (rseq > 0 && pend == pstart) {
+        this.pstart = this.pend = 0;
+      }
+    }
+
+    // cannot write if all packets are written and the reader didn't read them
+    else if (wseq - rseq >= npackets)
+      return 0;
+
+    else if (rseq < 0)
       close();
 
     if (isClosed())
       throw new ClosedException("Closed");
 
-    if (rseq == wseq && rseq > 0 && !dirty)
-      rseq = checkReset(rseq);
-
-    // cannot write if all packets are written and the reader didn't read them
-    if (wseq - rseq >= npackets)
-      return 0;
 
     // TODO: implement anti-truncation mechanism (write at 0 if remaining
     // space is too small)
-    int head = pstart + plen;
-    final int bytes = Math.min(getAvailableSpace(rseq, head), len);
+    final int bytes = Math.min(getAvailableSpace(rseq, pend), len);
     if (bytes > 0) {
-      plen += bytes;
-      buf.position(dataOffset + (head & dataMask));
+      buf.position(dataOffset + (pend & dataMask));
       buf.put(data, off, bytes);
-      dirty = true;
+      this.pend += bytes;
 
-      // TODO: optimize
-      // always flush when reaching end of buffer
-      if ((pstart & dataMask) + plen == capacity)
+      // flush when reaching end of buffer, otherwise next write will
+      // generate an inconsistent packet (overflowing the buffer)
+      if ((this.pend & dataMask) == 0) {
         flush();
+      }
     }
     return bytes;
   }
 
-  private int checkReset(int rseq) {
-    pstart = 0;
-
-    if (wseq > resetSeqNum && buf.get(RESET) == 0) {
-      System.out.println("Resetting seqnum at " + rseq);
-      wseq = 0;
-      rseq = 0;
-      buf.putInt(WSEQ, 0);
-      buf.putInt(RSEQ, 0);
-      buf.put(RESET, (byte) 1);
-    }
-    return rseq;
-  }
-
   public void flush() {
-    if (dirty) {
+    final int pend = this.pend;
+    final int pstart = this.pstart;
+    final ByteBuffer buf = this.buf;
+    if (pend > pstart) {
       int pkt = PACKET_INFO + (wseq & packetMask) * LEN_PACKET_INFO;
       buf.putInt(pkt, pstart);
-      buf.putInt(pkt + 4, plen);
+      buf.putInt(pkt + 4, pend - pstart);
       buf.putInt(WSEQ, ++wseq);
-      pstart += plen;
-      plen = 0;
-      dirty = false;
+      this.pstart = pend;
     }
   }
 
@@ -126,25 +110,7 @@ public class JocketWriter extends AbstractJocketBuffer {
    * @param head current data head
    */
   private int getAvailableSpace(int rseq, int head) {
-
-    if (rseq < wseq) {
-      int tail = start(rseq);
-
-      if (head == tail)
-        return capacity;
-
-      // if head == capacity then head = 0 (circular buffer)
-      head &= dataMask;
-      tail &= dataMask;
-
-      if (head > tail)
-        return capacity - head;
-
-      return tail - head;
-    }
-
-    else
-      return capacity - (head & dataMask);
+    return Math.min(start(rseq), head - (head & dataMask)) + capacity - head;
   }
 
   private int rseq() {
@@ -159,14 +125,33 @@ public class JocketWriter extends AbstractJocketBuffer {
     int rseq = rseq();
     if (wseq - rseq >= npackets)
       return 0;
-    return getAvailableSpace(rseq, head(rseq));
+    return getAvailableSpace(rseq, pend);
   }
 
+  /**
+   * For testing purposes.
+   */
   public int getSeqNum() {
     return wseq;
   }
 
+  /**
+   * For testing purposes.
+   */
   public int getPosition() {
     return head(rseq());
   }
+
+  public String debug() {
+    return String.format(
+        "wseq=%d rseq=%d pstart=%d plen=%d tail=%d dirty=%b capacity=%d", wseq,
+        rseq(), pstart, pend - pstart, head(rseq()), pend > pstart, capacity);
+  }
+
+  @Override
+  protected void close0() {
+    buf.putInt(WSEQ, -1);
+    writeMemoryBarrier();
+  }
+
 }
