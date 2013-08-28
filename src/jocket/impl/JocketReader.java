@@ -23,8 +23,8 @@ public class JocketReader extends AbstractJocketBuffer {
   public int read(byte[] data, int off, int len) {
     readMemoryBarrier();
 
-    checkResetFlag();
-    int wseq = buf.getInt(WSEQ);
+    // checkResetFlag();
+    final int wseq = buf.getInt(WSEQ);
 
     if (wseq < 0)
       close();
@@ -32,39 +32,35 @@ public class JocketReader extends AbstractJocketBuffer {
     if (isClosed())
       return -1;
 
-    // if (wseq == 0 && rseq > 0)
-    // rseq = 0;
-
     if (wseq <= rseq)
       return 0;
 
-    int index = rseq & packetMask;
-    int pktInfo = PACKET_INFO + index * LEN_PACKET_INFO;
-    int position = buf.getInt(pktInfo);
-    int available = buf.getInt(pktInfo + 4);
+    final ByteBuffer buf = this.buf;
+    final int pktInfo = PACKET_INFO + (rseq & packetMask) * LEN_PACKET_INFO;
+    final int available = buf.getInt(pktInfo + 4);
 
+    int pos = dataOffset + (buf.getInt(pktInfo) & dataMask);
     // if the whole packet can be read
     if (available <= len) {
-      buf.position(dataOffset + (position & dataMask));
+      len = available;
+      buf.position(pos);
       buf.get(data, off, available);
       buf.putInt(RSEQ, ++rseq);
-      writeMemoryBarrier();
-      return available;
     }
 
     // if the packet can be read only partially
     else {
       // read data
-      buf.position(dataOffset + (position & dataMask));
+      buf.position(pos);
       buf.get(data, off, len);
 
       // update packet info to make space available for writer
-      buf.putInt(pktInfo, position + len);
+      buf.putInt(pktInfo, buf.getInt(pktInfo) + len);
       buf.putInt(pktInfo + 4, available - len);
-      writeMemoryBarrier();
-      return len;
     }
 
+    writeMemoryBarrier();
+    return len;
   }
 
   private void checkResetFlag() {
@@ -74,7 +70,6 @@ public class JocketReader extends AbstractJocketBuffer {
       System.out.println("Got seqnum reset at " + rseq);
       rseq = 0;
       buf.put(RESET, (byte) 0);
-      // writeMemoryBarrier();
     }
   }
 

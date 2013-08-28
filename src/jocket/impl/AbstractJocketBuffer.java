@@ -75,6 +75,7 @@ public abstract class AbstractJocketBuffer implements Const {
     return closed;
   }
 
+  @Deprecated
   public void setResetSeqNum(int resetSeqNum) {
     this.resetSeqNum = resetSeqNum;
   }
