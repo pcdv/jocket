@@ -22,6 +22,7 @@ public final class JocketWriter extends AbstractJocketBuffer {
     final int wseq = this.wseq;
 
     if (rseq == wseq) {
+      // reset position in buffer when reader is up to date
       if (rseq > 0 && pend == pstart) {
         this.pstart = this.pend = 0;
       }
@@ -36,7 +37,6 @@ public final class JocketWriter extends AbstractJocketBuffer {
 
     if (isClosed())
       throw new ClosedException("Closed");
-
 
     // TODO: implement anti-truncation mechanism (write at 0 if remaining
     // space is too small)
@@ -128,6 +128,12 @@ public final class JocketWriter extends AbstractJocketBuffer {
     return getAvailableSpace(rseq, pend);
   }
 
+  @Override
+  protected void close0() {
+    buf.putInt(WSEQ, -1);
+    writeMemoryBarrier();
+  }
+
   /**
    * For testing purposes.
    */
@@ -142,16 +148,12 @@ public final class JocketWriter extends AbstractJocketBuffer {
     return head(rseq());
   }
 
+  /**
+   * For testing purposes.
+   */
   public String debug() {
     return String.format(
         "wseq=%d rseq=%d pstart=%d plen=%d tail=%d dirty=%b capacity=%d", wseq,
         rseq(), pstart, pend - pstart, head(rseq()), pend > pstart, capacity);
   }
-
-  @Override
-  protected void close0() {
-    buf.putInt(WSEQ, -1);
-    writeMemoryBarrier();
-  }
-
 }
