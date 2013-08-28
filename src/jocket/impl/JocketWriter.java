@@ -7,8 +7,14 @@ public final class JocketWriter extends AbstractJocketBuffer {
   /** The sequence number of the next packet to write. */
   private int wseq;
 
-  /** Current (not flushed) packet's start and end absolute position. */
+  /** Pending packet's absolute start and end positions. */
   private int pstart, pend;
+
+  /**
+   * Equivalent to (pend > pstart) but looks like it is faster to store this
+   * information in a dedicated boolean.
+   */
+  private boolean dirty;
 
   public JocketWriter(ByteBuffer buf, int npackets) {
     super(buf, npackets);
@@ -21,7 +27,7 @@ public final class JocketWriter extends AbstractJocketBuffer {
 
     if (rseq == wseq) {
       // reset position in buffer when reader is up to date
-      if (rseq > 0 && pend == pstart) {
+      if (rseq > 0 && !dirty) {
         this.pstart = this.pend = 0;
       }
     }
@@ -40,6 +46,7 @@ public final class JocketWriter extends AbstractJocketBuffer {
     // space is too small)
     final int bytes = Math.min(getAvailableSpace(rseq, pend), len);
     if (bytes > 0) {
+      dirty = true;
       buf.position(dataOffset + (pend & dataMask));
       buf.put(data, off, bytes);
       this.pend += bytes;
@@ -57,12 +64,13 @@ public final class JocketWriter extends AbstractJocketBuffer {
     final int pend = this.pend;
     final int pstart = this.pstart;
     final ByteBuffer buf = this.buf;
-    if (pend > pstart) {
+    if (dirty) {
       int pkt = PACKET_INFO + (wseq & packetMask) * LEN_PACKET_INFO;
       buf.putInt(pkt, pstart);
       buf.putInt(pkt + 4, pend - pstart);
       buf.putInt(WSEQ, ++wseq);
       this.pstart = pend;
+      dirty = false;
     }
   }
 
