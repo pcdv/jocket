@@ -40,7 +40,8 @@ public class TestJocketSocket extends AbstractJocketSocketTest {
   }
 
   /**
-   * Used to reproduce a bug.
+   * Used to reproduce a bug. Warning: this test works only if the jocket buffer
+   * capacity is big enough.
    */
   @Test
   public void testUnderflow() throws Exception {
