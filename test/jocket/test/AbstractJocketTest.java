@@ -54,6 +54,22 @@ public class AbstractJocketTest {
     return total;
   }
 
+  protected void flush() {
+    w.flush();
+  }
+
+  protected void write(int... bytes) {
+    for (int len : bytes) {
+      w.write(new byte[len], 0, len);
+    }
+  }
+
+  protected void read(int... bytes) {
+    for (int len : bytes) {
+      assertEquals(len, r.read(new byte[len], 0, len));
+    }
+  }
+
   public void read(String... str) throws EOFException {
     for (String s : str) {
       assertEquals(s, read());
@@ -63,6 +79,11 @@ public class AbstractJocketTest {
   protected String read() throws EOFException {
     byte[] buf = new byte[readBufSize];
     return read(buf, 0, buf.length);
+  }
+
+  protected void read(int bytes, String expect) throws EOFException {
+    byte[] buf = new byte[bytes];
+    assertEquals(expect, read(buf, 0, bytes));
   }
 
   protected String read(byte[] buf, int off, int len) throws EOFException {

@@ -85,6 +85,17 @@ public class TestJocket extends AbstractJocketTest {
   }
 
   @Test
+  public void testFullData3() throws Exception {
+    init(128, 8);
+    write("12345678");
+    read(2, "12");
+    assertEquals(2, w.available());
+    assertEquals(2, write0("xx"));
+    assertEquals(0, w.available());
+    write0("yy");
+  }
+
+  @Test
   public void testPartialRead() throws Exception {
     testFullData();
     byte[] buf = new byte[100];
@@ -173,7 +184,7 @@ public class TestJocket extends AbstractJocketTest {
 
     // buffer should be reset during next write
     write("Z");
-    assertEquals(1, w.getSeqNum());
+    // assertEquals(1, w.getSeqNum());
     assertEquals(1, w.getPosition());
 
     read("Z");
@@ -193,13 +204,13 @@ public class TestJocket extends AbstractJocketTest {
 
     // buffer should be reset during next write
     write("Z");
-    assertEquals(1, w.getSeqNum());
+    // assertEquals(1, w.getSeqNum());
     assertEquals(1, w.getPosition());
     write("X");
-    assertEquals(2, w.getSeqNum());
+    // assertEquals(2, w.getSeqNum());
     assertEquals(2, w.getPosition());
     write("Y");
-    assertEquals(3, w.getSeqNum());
+    // assertEquals(3, w.getSeqNum());
     assertEquals(3, w.getPosition());
 
     read("Z");
@@ -207,4 +218,24 @@ public class TestJocket extends AbstractJocketTest {
     read("Y");
   }
 
+  @Test
+  public void testUnderflow() throws Exception {
+    init(64, 8);
+
+    write(3, 5, 5, 12);
+    read(2, 4, 2, 0, 0);
+
+    write(5);
+    flush();
+    read(1, 1);
+
+    write(3, 3);
+    flush();
+    write(5);
+    read(1, 1, 1, 0);
+
+    write(30);
+    flush();
+    read(3, 2);
+  }
 }
