@@ -5,7 +5,9 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.channels.FileChannel.MapMode;
+import java.util.Random;
 
 import jocket.impl.Const;
 import jocket.impl.JocketReader;
@@ -28,8 +30,18 @@ public class JocketFile {
   private final File file;
 
   public JocketFile() throws IOException {
-    this(File.createTempFile("jocket", ""), true);
+    this(createTempFile(), true);
     file.deleteOnExit();
+  }
+
+  private static File createTempFile() throws IOException {
+    try {
+      // under linux, try to use tmpfs
+      File dir = new File("/dev/shm");
+      return new File(dir, "jocket-" + new Random().nextInt(Integer.MAX_VALUE));
+    } catch (Exception ex) {
+      return File.createTempFile("jocket", "");
+    }
   }
 
   public JocketFile(File file, boolean create) throws IOException {
@@ -50,7 +62,10 @@ public class JocketFile {
       io.setLength(size);
     }
 
-    this.buf = io.getChannel().map(MapMode.READ_WRITE, 0, size);
+    FileChannel channel = io.getChannel();
+    this.buf = channel.map(MapMode.READ_WRITE, 0, size);
+    buf.load();
+    channel.close();
     this.reader = new JocketReader(buf, npackets);
     this.writer = new JocketWriter(buf, npackets);
   }
