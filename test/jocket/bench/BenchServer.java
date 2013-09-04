@@ -50,9 +50,10 @@ public class BenchServer {
       throws IOException {
     DataInputStream din = new DataInputStream(in);
     int niter = din.readInt();
+    int size = din.readInt();
     byte[] buf = new byte[1024 * 1024];
     for (int i = 0; i < niter; i++) {
-      int size = din.readInt();
+      din.readFully(buf, 0, 4);
       out.write(buf, 0, size);
       out.flush();
     }
