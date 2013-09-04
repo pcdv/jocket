@@ -60,6 +60,7 @@ public class BenchClient {
     long time = System.currentTimeMillis();
     System.out.println("Starting " + niter + " iterations");
     out.writeInt(niter);
+    out.writeInt(datasize);
     out.flush();
     for (int i = 0; i < niter; i++) {
       iter(i);
@@ -74,7 +75,7 @@ public class BenchClient {
     long start = System.nanoTime();
 
     // send request
-    writeInt(out, datasize);
+    out.write(buf, 0, 4);
     out.flush();
 
     // read response
