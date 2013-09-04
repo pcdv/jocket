@@ -238,4 +238,17 @@ public class TestJocket extends AbstractJocketTest {
     flush();
     read(3, 2);
   }
+
+  public void testBigSeqNum() throws Exception {
+    init(64, 4);
+
+    for (int i = 0; i < 1000; i++) {
+      read(1);
+      read(1);
+      write(1);
+      write(1);
+      write(1);
+      flush();
+    }
+  }
 }
