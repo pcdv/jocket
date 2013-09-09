@@ -16,11 +16,7 @@ import jocket.net.ServerJocket;
  *
  * @author pcdv
  */
-public final class BenchServer {
-
-  static final boolean USE_JOCKET = !Boolean.getBoolean("tcp");
-
-  static final int PORT = Integer.getInteger("port", 3333);
+public final class BenchServer implements Settings {
 
   public BenchServer() throws IOException {
     if (USE_JOCKET)
