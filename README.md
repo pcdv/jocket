@@ -7,8 +7,6 @@ Low-latency replacement for Java sockets, using shared memory.
 Status
 ------
 
-Jocket is young and still under development. It has been tested only on Linux.
-
 Current benchmarks show a 10-100x performance improvement when compared to a standard socket.
 
 The following chart displays the RTT latency (in microseconds) between two processes:
@@ -18,6 +16,17 @@ The following chart displays the RTT latency (in microseconds) between two proce
 ![alt text](docs/bench.png "Latency for an 1kb PING. Red = Socket, green = Jocket. The thick green line is roughly between 0.50 and 0.56 microseconds")
 
 This benchmark was run on an Intel Core i5-2500.
+
+Jocket is young and still under development. It has been tested only on Linux.
+
+API
+---
+
+Currently, there are 2 APIs:
+ - JocketReader/JocketWriter: low-level, non blocking API
+ - JocketSocket: high-level, blocking API mimicking java.net.Socket
+
+The benchmark used to generate the above diagram is based on the JocketSocket API.
 
 How it works
 ------------
@@ -54,6 +63,19 @@ OutputStream out = sock.getOutputStream();
 
 Otherwise, Jocket readers and writers have their own API allowing to perform non-blocking read/writes, potentially faster than with input/output streams.
 
+
+Known issues
+------------
+
+### Spinning vs Sleeping
+
+The JocketSocket API transforms a non-blocking API into a blocking API. When data can't be read or written, the program must wait. The default waiting strategy is to spin, then yield(), then parkNanos(), then Thread.sleep().
+
+This has the following disadvantages:
+ - high CPU usage for a small amount of time
+ - greater latency after a while
+
+I'll experiment with *futex*es (with JNI and Unsafe) to see whether a spin-parkNanos-WAIT strategy is possible.
 
 Credits
 -------
