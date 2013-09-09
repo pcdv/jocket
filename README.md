@@ -1,7 +1,7 @@
 Jocket
 ======
 
-Low-latency replacement for Java sockets, using shared memory.
+Low-latency replacement for local Java sockets, using shared memory.
 
 
 Status
