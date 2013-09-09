@@ -7,9 +7,9 @@ Low-latency replacement for Java sockets, using shared memory.
 Status
 ------
 
-Jocket is young and still in progress.
+Jocket is young and still under development. It has been tested only on Linux.
 
-Current benchmarks show a 10-50x performance improvement when compared to a standard socket.
+Current benchmarks show a 10-100x performance improvement when compared to a standard socket.
 
 The following chart displays the RTT latency (in microseconds) between two processes:
  - the client sends a PING request (payload = 4 bytes)
@@ -17,9 +17,7 @@ The following chart displays the RTT latency (in microseconds) between two proce
 
 ![alt text](docs/bench.png "Latency for an 1kb PING. Red = Socket, green = Jocket")
 
-
-NB: this benchmark has been run on an old single-core "holiday" laptop. I will update it with probably better results when I have access to my main computer.
-
+This benchmark was run on an Intel Core i5-2500.
 
 How it works
 ------------
