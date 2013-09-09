@@ -19,7 +19,7 @@ import jocket.impl.JocketWriter;
  *
  * @author pcdv
  */
-public class JocketFile {
+public class JocketFile implements Const {
 
   private final MappedByteBuffer buf;
 
@@ -40,29 +40,23 @@ public class JocketFile {
 
   /**
    * Opens and wrap specified exchange file with a reader and writer.
-   *
-   * @param file
-   * @throws IOException
    */
   public JocketFile(File file) throws IOException {
     this(file, false, -1, -1);
   }
 
-  public JocketFile(File file, boolean create, int maxPackets, int capacity) throws IOException {
+  private JocketFile(File file, boolean create, int maxPackets, int capacity) throws IOException {
     if (!create && !file.exists())
       throw new FileNotFoundException("File does not exist");
 
     this.file = file;
     this.io = new RandomAccessFile(file, "rw");
 
-    int size;
-
     if (create) {
-      size = capacity + Const.PACKET_INFO + maxPackets * Const.LEN_PACKET_INFO;
+      int size = capacity + PACKET_INFO + maxPackets * LEN_PACKET_INFO;
       io.setLength(0);
       io.setLength(size);
     }
-    file.deleteOnExit();
 
     FileChannel channel = io.getChannel();
     buf = channel.map(MapMode.READ_WRITE, 0, io.length());
@@ -70,15 +64,17 @@ public class JocketFile {
     channel.close();
 
     if (create) {
-      buf.putInt(Const.META_MAX_PACKETS, maxPackets);
-      buf.putInt(Const.META_CAPACITY, capacity);
+      buf.putInt(META_MAX_PACKETS, maxPackets);
+      buf.putInt(META_CAPACITY, capacity);
+      buf.force();
     }
     else {
-      maxPackets = buf.getInt(Const.META_MAX_PACKETS);
+      maxPackets = buf.getInt(META_MAX_PACKETS);
     }
 
-    this.reader = new JocketReader(buf, maxPackets);
-    this.writer = new JocketWriter(buf, maxPackets);
+    reader = new JocketReader(buf, maxPackets);
+    writer = new JocketWriter(buf, maxPackets);
+    file.deleteOnExit();
   }
 
   public JocketReader reader() {

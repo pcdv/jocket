@@ -12,6 +12,12 @@ import java.net.SocketTimeoutException;
 
 public class ServerJocket implements Closeable {
 
+  private static final int DEFAULT_MAX_PACKETS = Integer
+      .getInteger("jocket.maxPackets", 1024);
+
+  private static final int DEFAULT_CAPACITY = Integer
+      .getInteger("jocket.capacity", 4 * 1024 * 1024);
+
   static final int MAGIC = 0x50C4E7;
 
   private final ServerSocket srv;
@@ -22,17 +28,29 @@ public class ServerJocket implements Closeable {
 
   private boolean closed;
 
+  /**
+   * Creates a new Jocket server with default settings.
+   *
+   * @param port the TCP port on which Jocket will listen for connections
+   * @throws IOException
+   */
   public ServerJocket(int port) throws IOException {
-    this(port, 1024, 1024 * 1024);
+    this(port, DEFAULT_MAX_PACKETS, DEFAULT_CAPACITY);
   }
 
   public ServerJocket(int port, int maxPackets, int capacity) throws IOException {
+    if (Integer.bitCount(maxPackets) != 1)
+      throw new IllegalArgumentException("Max packets must be a power of 2");
+
+    if (Integer.bitCount(capacity) != 1)
+      throw new IllegalArgumentException("Capacity must be a power of 2");
+
     this.maxPackets = maxPackets;
     this.capacity = capacity;
     srv = new ServerSocket();
 
     // FIXME: getLoopackAddress() == @since 1.7
-    srv.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
+    srv.bind(new InetSocketAddress(InetAddress.getByName(null), port));
   }
 
   @Override

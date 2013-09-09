@@ -47,7 +47,7 @@ public class JocketSocket {
    */
   public JocketSocket(int port) throws IOException {
     // FIXME: getLoopackAddress() == @since 1.7
-    Socket s = new Socket(InetAddress.getLoopbackAddress(), port);
+    Socket s = new Socket(InetAddress.getByName(null), port);
     // allows to wakeup if server never does the handshake
     s.setSoTimeout(1000);
 
