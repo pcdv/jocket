@@ -71,8 +71,8 @@ public class JocketSocket {
     File r = new File(in.readUTF());
     File w = new File(in.readUTF());
 
-    JocketFile jfr = new JocketFile(r, false);
-    JocketFile jfw = new JocketFile(w, false);
+    JocketFile jfr = new JocketFile(r);
+    JocketFile jfw = new JocketFile(w);
 
     jfr.deleteFile();
     jfw.deleteFile();

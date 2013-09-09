@@ -16,9 +16,19 @@ public class ServerJocket implements Closeable {
 
   private final ServerSocket srv;
 
+  private final int maxPackets;
+
+  private final int capacity;
+
   private boolean closed;
 
   public ServerJocket(int port) throws IOException {
+    this(port, 1024, 1024 * 1024);
+  }
+
+  public ServerJocket(int port, int maxPackets, int capacity) throws IOException {
+    this.maxPackets = maxPackets;
+    this.capacity = capacity;
     srv = new ServerSocket();
 
     // FIXME: getLoopackAddress() == @since 1.7
@@ -55,14 +65,13 @@ public class ServerJocket implements Closeable {
 
       if (magic != MAGIC) {
         s.close();
-        //throw new IOException("Client does not support the Jocket protocol");
         continue;
       }
 
       // TODO: make parameters configurable through ServerJocket
       // TODO: write parameters in file header (+ misc meta data)
-      JocketFile fw = new JocketFile();
-      JocketFile fr = new JocketFile();
+      JocketFile fw = new JocketFile(maxPackets, capacity);
+      JocketFile fr = new JocketFile(maxPackets, capacity);
 
       out.writeUTF(fw.getPath());
       out.writeUTF(fr.getPath());
