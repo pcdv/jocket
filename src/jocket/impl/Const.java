@@ -9,6 +9,10 @@ public interface Const {
    */
   int META = 0;
 
+  int META_MAX_PACKETS = META;
+
+  int META_CAPACITY = META + 4;
+
   /**
    * Position at which the writer puts its sequence number.
    */

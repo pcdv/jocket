@@ -16,58 +16,69 @@ import jocket.impl.JocketWriter;
 /**
  * Creates or opens an exchange file wrapped in a mapped byte buffer and makes
  * it easy to obtain a JocketReader or JocketWriter instance.
- * 
+ *
  * @author pcdv
  */
 public class JocketFile {
 
   private final MappedByteBuffer buf;
+
   private final RandomAccessFile io;
+
   private final JocketReader reader;
+
   private final JocketWriter writer;
-  private final int npackets;
-  private final int size;
+
   private final File file;
 
-  public JocketFile() throws IOException {
-    this(createTempFile(), true);
-    file.deleteOnExit();
+  /**
+   * Creates a new exchange file and associated reader and writer.
+   */
+  public JocketFile(int maxPackets, int capacity) throws IOException {
+    this(createTempFile(), true, maxPackets, capacity);
   }
 
-  private static File createTempFile() throws IOException {
-    try {
-      // under linux, try to use tmpfs
-      File dir = new File("/dev/shm");
-      return new File(dir, "jocket-" + new Random().nextInt(Integer.MAX_VALUE));
-    } catch (Exception ex) {
-      return File.createTempFile("jocket", "");
-    }
+  /**
+   * Opens and wrap specified exchange file with a reader and writer.
+   *
+   * @param file
+   * @throws IOException
+   */
+  public JocketFile(File file) throws IOException {
+    this(file, false, -1, -1);
   }
 
-  public JocketFile(File file, boolean create) throws IOException {
+  public JocketFile(File file, boolean create, int maxPackets, int capacity) throws IOException {
     if (!create && !file.exists())
       throw new FileNotFoundException("File does not exist");
 
     this.file = file;
     this.io = new RandomAccessFile(file, "rw");
 
-    // TODO: this information should be configurable (in create mode) or
-    // present in file (in !create mode)
-    this.npackets = 1024;
-    this.size = 1024 * 1024 + Const.PACKET_INFO + npackets
-        * Const.LEN_PACKET_INFO;
+    int size;
 
     if (create) {
+      size = capacity + Const.PACKET_INFO + maxPackets * Const.LEN_PACKET_INFO;
       io.setLength(0);
       io.setLength(size);
     }
+    file.deleteOnExit();
 
     FileChannel channel = io.getChannel();
-    this.buf = channel.map(MapMode.READ_WRITE, 0, size);
+    buf = channel.map(MapMode.READ_WRITE, 0, io.length());
     buf.load();
     channel.close();
-    this.reader = new JocketReader(buf, npackets);
-    this.writer = new JocketWriter(buf, npackets);
+
+    if (create) {
+      buf.putInt(Const.META_MAX_PACKETS, maxPackets);
+      buf.putInt(Const.META_CAPACITY, capacity);
+    }
+    else {
+      maxPackets = buf.getInt(Const.META_MAX_PACKETS);
+    }
+
+    this.reader = new JocketReader(buf, maxPackets);
+    this.writer = new JocketWriter(buf, maxPackets);
   }
 
   public JocketReader reader() {
@@ -83,10 +94,21 @@ public class JocketFile {
   }
 
   /**
-   * Deletes the file to make it harder to sniff stream. Can be called (at least
-   * under linux) after both endpoints have opened the file.
+   * Deletes the file to make it harder to sniff stream. Can be called (at
+   * least under linux) after both endpoints have opened the file.
    */
   public void deleteFile() {
     file.delete();
+  }
+
+  private static File createTempFile() throws IOException {
+    try {
+      // under linux, try to use tmpfs
+      File dir = new File("/dev/shm");
+      return new File(dir, "jocket-" + new Random().nextInt(Integer.MAX_VALUE));
+    }
+    catch (Exception ex) {
+      return File.createTempFile("jocket", "");
+    }
   }
 }
