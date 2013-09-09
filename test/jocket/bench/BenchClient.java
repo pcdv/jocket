@@ -10,24 +10,23 @@ import java.net.Socket;
 import jocket.net.JocketSocket;
 
 /**
- * A standalone benchmark running the both client and server.
+ * Client (and master) part of the client/server benchmark.
  *
  * @author pcdv
  */
-@SuppressWarnings("resource")
 public final class BenchClient {
 
-  private final int reps = Integer.getInteger("reps", 300000);
+  static final int REPS = Integer.getInteger("reps", 300000);
 
-  private final int replySize = Integer.getInteger("replySize", 1024);
+  static final int REPLY_SIZE = Integer.getInteger("replySize", 1024);
 
-  private final int batch = Integer.getInteger("batch", 1);
+  static final int BATCH = Integer.getInteger("batch", 1);
 
-  private final boolean useJocket = !Boolean.getBoolean("tcp");
+  static final boolean USE_JOCKET = !Boolean.getBoolean("tcp");
 
-  private final int port = Integer.getInteger("port", 3333);
+  static final int PORT = Integer.getInteger("port", 3333);
 
-  private final int warmup = Integer.getInteger("warmup", 50000);
+  static final int WARMUP = Integer.getInteger("warmup", 50000);
 
   private final byte[] buf;
 
@@ -40,23 +39,24 @@ public final class BenchClient {
   private DataOutputStream out;
 
   public BenchClient() throws IOException {
-    this.nanos = new long[reps];
-    this.buf = new byte[replySize];
-    if (useJocket)
+    this.nanos = new long[REPS];
+    this.buf = new byte[REPLY_SIZE];
+    if (USE_JOCKET)
       this.fileName = initWithJocket();
     else
       this.fileName = initWithSocket();
   }
 
   private String initWithJocket() throws IOException {
-    JocketSocket s = new JocketSocket(port);
+    JocketSocket s = new JocketSocket(PORT);
     in = new DataInputStream(s.getInputStream());
     out = new DataOutputStream(s.getOutputStream());
     return "/tmp/Jocket";
   }
 
+  @SuppressWarnings("resource")
   private String initWithSocket() throws IOException {
-    Socket s = new Socket("localhost", port);
+    Socket s = new Socket("localhost", PORT);
     s.setTcpNoDelay(true);
     in = new DataInputStream(s.getInputStream());
     out = new DataOutputStream(s.getOutputStream());
@@ -69,19 +69,19 @@ public final class BenchClient {
   public void bench() throws IOException {
 
     long time = System.currentTimeMillis();
-    out.writeInt(reps * batch + warmup);
-    out.writeInt(replySize);
+    out.writeInt(REPS * BATCH + WARMUP);
+    out.writeInt(REPLY_SIZE);
 
     System.out.println("Warmup");
-    for (int i = 0; i < warmup; i++) {
+    for (int i = 0; i < WARMUP; i++) {
       iter(1);
     }
 
-    System.out.println("Starting " + reps + " iterations");
-    for (int i = 0; i < reps; i++) {
+    System.out.println("Starting " + REPS + " iterations");
+    for (int i = 0; i < REPS; i++) {
       long start = System.nanoTime();
-      iter(batch);
-      nanos[i] = (System.nanoTime() - start) / batch;
+      iter(BATCH);
+      nanos[i] = (System.nanoTime() - start) / BATCH;
     }
     time = System.currentTimeMillis() - time;
 
@@ -96,7 +96,7 @@ public final class BenchClient {
       out.flush();
 
       // read response
-      in.readFully(buf, 0, replySize);
+      in.readFully(buf, 0, REPLY_SIZE);
     }
   }
 

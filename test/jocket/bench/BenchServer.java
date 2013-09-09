@@ -18,19 +18,19 @@ import jocket.net.ServerJocket;
  */
 public final class BenchServer {
 
-  private final boolean useJocket = !Boolean.getBoolean("tcp");
+  static final boolean USE_JOCKET = !Boolean.getBoolean("tcp");
 
-  private final int port = Integer.getInteger("port", 3333);
+  static final int PORT = Integer.getInteger("port", 3333);
 
   public BenchServer() throws IOException {
-    if (useJocket)
+    if (USE_JOCKET)
       initWithJocket();
     else
       initWithSocket();
   }
 
   private void initWithJocket() throws IOException {
-    ServerJocket srv = new ServerJocket(port);
+    ServerJocket srv = new ServerJocket(PORT);
     System.out.println("Jocket listening on " + srv.getLocalPort());
     JocketSocket s = srv.accept();
     srv.close();
@@ -38,7 +38,7 @@ public final class BenchServer {
   }
 
   private void initWithSocket() throws IOException {
-    ServerSocket srv = new ServerSocket(port);
+    ServerSocket srv = new ServerSocket(PORT);
     System.out.println("Java ServerSocket listening on " + srv.getLocalPort());
     Socket s = srv.accept();
     srv.close();
