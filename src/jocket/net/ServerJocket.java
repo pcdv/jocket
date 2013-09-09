@@ -8,15 +8,20 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 
 public class ServerJocket implements Closeable {
 
   static final int MAGIC = 0x50C4E7;
+
   private final ServerSocket srv;
+
   private boolean closed;
 
   public ServerJocket(int port) throws IOException {
     srv = new ServerSocket();
+
+    // FIXME: getLoopackAddress() == @since 1.7
     srv.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
   }
 
@@ -33,11 +38,24 @@ public class ServerJocket implements Closeable {
         throw new IllegalStateException("Closed");
 
       Socket s = srv.accept();
+      // allows to wakeup if client never does the handshake
+      s.setSoTimeout(1000);
+
       DataInputStream in = new DataInputStream(s.getInputStream());
-      int magic = in.readInt();
+      DataOutputStream out = new DataOutputStream(s.getOutputStream());
+      out.writeInt(MAGIC);
+      out.flush();
+
+      int magic = 0;
+      try {
+        magic = in.readInt();
+      }
+      catch (SocketTimeoutException timeout) {
+      }
 
       if (magic != MAGIC) {
         s.close();
+        //throw new IOException("Client does not support the Jocket protocol");
         continue;
       }
 
@@ -46,9 +64,9 @@ public class ServerJocket implements Closeable {
       JocketFile fw = new JocketFile();
       JocketFile fr = new JocketFile();
 
-      DataOutputStream out = new DataOutputStream(s.getOutputStream());
       out.writeUTF(fw.getPath());
       out.writeUTF(fr.getPath());
+      out.flush();
 
       in.readInt();
       fw.deleteFile();
