@@ -15,7 +15,7 @@ The following chart displays the RTT latency (in microseconds) between two proce
  - the client sends a PING request (payload = 4 bytes)
  - the server replies with a PONG response (payload = 1024 bytes)
 
-![alt text](docs/bench.png "Latency for an 1kb PING. Red = Socket, green = Jocket")
+![alt text](docs/bench.png "Latency for an 1kb PING. Red = Socket, green = Jocket. The thick green line is roughly between 0.50 and 0.56 microseconds")
 
 This benchmark was run on an Intel Core i5-2500.
 
