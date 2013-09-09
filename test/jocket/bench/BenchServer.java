@@ -12,56 +12,53 @@ import jocket.net.JocketSocket;
 import jocket.net.ServerJocket;
 
 /**
- * A standalone benchmark running the both client and server.
- * 
+ * Server part of the client/server benchmark.
+ *
  * @author pcdv
  */
-public class BenchServer {
+public final class BenchServer {
 
-  private final int port;
+  private final boolean useJocket = !Boolean.getBoolean("tcp");
 
-  public BenchServer(int port, boolean useJocket) throws IOException {
-    this.port = port;
+  private final int port = Integer.getInteger("port", 3333);
+
+  public BenchServer() throws IOException {
     if (useJocket)
-      initJocket();
+      initWithJocket();
     else
-      initSocket();
+      initWithSocket();
   }
 
-  private void initJocket() throws IOException {
+  private void initWithJocket() throws IOException {
     ServerJocket srv = new ServerJocket(port);
     System.out.println("Jocket listening on " + srv.getLocalPort());
     JocketSocket s = srv.accept();
     srv.close();
-    answerLoop(s.getInputStream(), s.getOutputStream());
+    run(s.getInputStream(), s.getOutputStream());
   }
 
-  private void initSocket() throws IOException {
+  private void initWithSocket() throws IOException {
     ServerSocket srv = new ServerSocket(port);
     System.out.println("Java ServerSocket listening on " + srv.getLocalPort());
     Socket s = srv.accept();
     srv.close();
     s.setTcpNoDelay(true);
-    answerLoop(s.getInputStream(),
-        new BufferedOutputStream(s.getOutputStream()));
+    run(s.getInputStream(), new BufferedOutputStream(s.getOutputStream()));
   }
 
-  protected void answerLoop(InputStream in, OutputStream out)
-      throws IOException {
+  private void run(InputStream in, OutputStream out) throws IOException {
     DataInputStream din = new DataInputStream(in);
-    int niter = din.readInt();
-    int size = din.readInt();
-    byte[] buf = new byte[1024 * 1024];
-    for (int i = 0; i < niter; i++) {
+    int reps = din.readInt();
+    int replySize = din.readInt();
+    byte[] buf = new byte[10 * 1024];
+    for (int i = 0; i < reps; i++) {
       din.readFully(buf, 0, 4);
-      out.write(buf, 0, size);
+      out.write(buf, 0, replySize);
       out.flush();
     }
   }
 
   public static void main(String[] args) throws IOException {
-    int port = Integer.parseInt(args[0]);
-    boolean jock = args[1].equals("jocket");
-    new BenchServer(port, jock);
+    new BenchServer();
   }
 }
