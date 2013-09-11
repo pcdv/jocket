@@ -1,9 +1,7 @@
 package jocket.bench;
 
-import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -30,7 +28,7 @@ public final class BenchServer implements Settings {
     System.out.println("Jocket listening on " + srv.getLocalPort());
     JocketSocket s = srv.accept();
     srv.close();
-    run(s.getInputStream(), s.getOutputStream());
+    run(new DataInputStream(s.getInputStream()), s.getOutputStream());
   }
 
   private void initWithSocket() throws IOException {
@@ -39,14 +37,14 @@ public final class BenchServer implements Settings {
     Socket s = srv.accept();
     srv.close();
     s.setTcpNoDelay(true);
-    run(s.getInputStream(), new BufferedOutputStream(s.getOutputStream()));
+    run(new DataInputStream(s.getInputStream()), s.getOutputStream());
   }
 
-  private void run(InputStream in, OutputStream out) throws IOException {
-    DataInputStream din = new DataInputStream(in);
-    int reps = din.readInt();
-    int replySize = din.readInt();
-    byte[] buf = new byte[10 * 1024];
+  private void run(final DataInputStream din, final OutputStream out)
+      throws IOException {
+    final int reps = din.readInt();
+    final int replySize = din.readInt();
+    final byte[] buf = new byte[Math.max(4, replySize)];
     for (int i = 0; i < reps; i++) {
       din.readFully(buf, 0, 4);
       out.write(buf, 0, replySize);
