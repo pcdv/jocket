@@ -5,10 +5,10 @@ import java.io.IOException;
 import jocket.net.JocketSocket;
 import jocket.net.ServerJocket;
 
-import org.junit.After;
-import org.junit.Before;
+import org.junit.*;
 
-public class AbstractJocketSocketTest {
+@Ignore
+public abstract class AbstractJocketSocketTest {
   protected JocketSocket c;
   protected volatile JocketSocket s;
   protected ServerJocket srv;
