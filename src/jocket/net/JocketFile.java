@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileChannel.MapMode;
@@ -60,6 +61,7 @@ public class JocketFile implements Const {
 
     FileChannel channel = io.getChannel();
     buf = channel.map(MapMode.READ_WRITE, 0, io.length());
+    buf.order(ByteOrder.nativeOrder());
     buf.load();
     channel.close();
 
