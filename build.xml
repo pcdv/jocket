@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="jocket" default="jar">
+
+	<property name="version" value="0.2.0" />
+
+	<target name="jar" depends="javac">
+		<jar destfile="jocket-${version}.jar" />
+	</target>
+
+	<target name="javac">
+		<mkdir dir="classes" />
+		<javac destdir="classes" includeantruntime="false" srcdir="src:test" excludes="**/test/*" />
+	</target>
+
+	<target name="test" depends="javac-test">
+		<junit showoutput="false">
+			<classpath>
+        <pathelement location="classes"/>
+        <fileset dir="lib" includes="*.jar" />
+      </classpath>
+			<batchtest>
+        <fileset dir="test" includes="jocket/test/*" />
+			</batchtest>
+		</junit>
+	</target>
+
+	<path id="libs">
+		<fileset dir="lib" includes="*.jar" />
+	</path>
+
+	<target name="javac-test" depends="javac">
+		<echo>NB: To build JUnits, junit jar must be copied in lib/ directory </echo>
+		<javac destdir="classes" includeantruntime="false" srcdir="test" includes="**/test/*" classpathref="libs" />
+	</target>
+
+	<target name="clean">
+		<delete verbose="false" includeEmptyDirs="true">
+			<fileset dir="classes" />
+		</delete>
+	</target>
+
+</project>
