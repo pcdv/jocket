@@ -16,12 +16,33 @@ public final class JocketWriter extends AbstractJocketBuffer {
    */
   private boolean dirty;
 
+  /**
+   * Optional packet alignment.
+   */
+  private int align = 64;
+
+  /**
+   * Used to modulo on align.
+   */
+  private int alignMask = 63;
+
   public JocketWriter(ByteBuffer buf, int npackets) {
     super(buf, npackets);
   }
 
+  /**
+   * Sets packet alignment.
+   *
+   * @param align must be either 0 or a power of 2
+   */
+  public void setAlign(int align) {
+    if (align < 0 || align > 0 && Integer.bitCount(align) != 1)
+      throw new IllegalArgumentException("Invalid alignment: " + align);
+    this.align = align;
+    this.alignMask = align == 0 ? 0 : align - 1;
+  }
+
   public int write(final byte[] data, final int off, final int len) {
-    readMemoryBarrier();
     final int rseq = rseq();
     final int wseq = this.wseq;
 
@@ -69,14 +90,22 @@ public final class JocketWriter extends AbstractJocketBuffer {
       buf.putInt(pkt, pstart);
       buf.putInt(pkt + 4, pend - pstart);
       buf.putInt(WSEQ, ++wseq);
-      this.pstart = pend;
+
+      int mod = pend & alignMask;
+      if (mod != 0) {
+        this.pend += align - mod;
+        this.pstart = this.pend;
+      }
+      else
+        this.pstart = pend;
+
       dirty = false;
     }
   }
 
   /**
    * Returns the absolute position of the last read byte.
-   * 
+   *
    * @param rseq reader sequence number.
    */
   private int head(int rseq) {
@@ -91,7 +120,7 @@ public final class JocketWriter extends AbstractJocketBuffer {
 
   /**
    * Returns the absolute position of specified packet.
-   * 
+   *
    * @param seq a packet number
    */
   private int start(int seq) {
@@ -108,7 +137,7 @@ public final class JocketWriter extends AbstractJocketBuffer {
    * <li>head + capacity - (head - head % capacity)
    * <li>tail + capacity
    * </ul>
-   * 
+   *
    * @param rseq sequence number of reader
    * @param head position of last written byte
    */
@@ -121,6 +150,7 @@ public final class JocketWriter extends AbstractJocketBuffer {
    * barrier.
    */
   private final int rseq() {
+    readMemoryBarrier();
     return buf.getInt(RSEQ);
   }
 
@@ -159,8 +189,14 @@ public final class JocketWriter extends AbstractJocketBuffer {
    * For testing purposes.
    */
   public String debug() {
-    return String.format(
-        "wseq=%d rseq=%d pstart=%d plen=%d tail=%d dirty=%b capacity=%d", wseq,
-        rseq(), pstart, pend - pstart, head(rseq()), pend > pstart, capacity);
+    return String
+        .format("wseq=%d rseq=%d pstart=%d plen=%d tail=%d dirty=%b capacity=%d",
+                wseq,
+                rseq(),
+                pstart,
+                pend - pstart,
+                head(rseq()),
+                pend > pstart,
+                capacity);
   }
 }
