@@ -81,3 +81,13 @@ Credits
 -------
 
 This project takes some ideas from @mjpt777 and @peter-lawrey
+
+
+Changes
+-------
+
+### 0.3.0
+
+Align packets on cache lines by default (avoids false sharing).
+
+Use native ordering in direct byte buffer to avoid useless byte swaps.
