@@ -9,7 +9,10 @@ import jocket.impl.Const;
 import jocket.impl.JocketReader;
 import jocket.impl.JocketWriter;
 
-public class AbstractJocketTest {
+import org.junit.*;
+
+@Ignore
+public abstract class AbstractJocketTest {
 
   private final int readBufSize = 8192;
 
@@ -23,12 +26,13 @@ public class AbstractJocketTest {
           * Const.LEN_PACKET_INFO + capacity);
       w = new JocketWriter(buf, npackets);
       r = new JocketReader(buf, npackets);
+      w.setAlign(0);
     }
   }
 
   /**
    * Writes strings, flushing after each of them.
-   * 
+   *
    * @return number of bytes successfully written
    */
   protected int write(String... strs) {
@@ -37,7 +41,7 @@ public class AbstractJocketTest {
 
   /**
    * Writes strings without flushing.
-   * 
+   *
    * @return number of bytes successfully written
    */
   protected int write0(String... strs) {
