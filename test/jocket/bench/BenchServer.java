@@ -1,6 +1,7 @@
 package jocket.bench;
 
 import java.io.DataInputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.ServerSocket;
@@ -45,7 +46,7 @@ public final class BenchServer implements Settings {
     final int reps = din.readInt();
     final int replySize = din.readInt();
     final byte[] buf = new byte[Math.max(4, replySize)];
-    for (int i = 0; i < reps; i++) {
+    while (true) {
       din.readFully(buf, 0, 4);
       out.write(buf, 0, replySize);
       out.flush();
@@ -53,6 +54,10 @@ public final class BenchServer implements Settings {
   }
 
   public static void main(String[] args) throws IOException {
-    new BenchServer();
+    try {
+      new BenchServer();
+    }
+    catch (EOFException eof) {
+    }
   }
 }
