@@ -3,8 +3,13 @@
 
 	<property name="version" value="0.2.0" />
 
+	<target name="dist" depends="clean, jar">
+	</target>
+
 	<target name="jar" depends="javac">
-		<jar destfile="jocket-${version}.jar" />
+		<jar destfile="jocket-${version}.jar" >
+      <fileset dir="classes" includes="**"/>
+    </jar>
 	</target>
 
 	<target name="javac">
@@ -14,9 +19,9 @@
 
 	<target name="test" depends="javac-test">
 		<junit showoutput="false">
+      <classpath refid="libs"/>
 			<classpath>
         <pathelement location="classes"/>
-        <fileset dir="lib" includes="*.jar" />
       </classpath>
 			<batchtest>
         <fileset dir="test" includes="jocket/test/*" />
