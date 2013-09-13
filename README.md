@@ -75,7 +75,7 @@ This has the following disadvantages:
  - high CPU usage for a small amount of time
  - greater latency after a while
 
-I'll experiment with *futex*es (with JNI and Unsafe) to see whether a spin-parkNanos-WAIT strategy is possible.
+Next release will include a new notification/waiting strategy based on futex'es (so will be available only on Linux).
 
 Credits
 -------
