@@ -3,7 +3,6 @@ package jocket.impl;
 import java.io.IOException;
 import java.io.InputStream;
 
-import jocket.wait.BusyYieldSleep;
 import jocket.wait.WaitStrategy;
 
 public class JocketInputStream extends InputStream {
@@ -12,7 +11,7 @@ public class JocketInputStream extends InputStream {
   private final WaitStrategy wait;
 
   public JocketInputStream(JocketReader reader) {
-    this(reader, new BusyYieldSleep());
+    this(reader, reader.getWaitStrategy());
   }
 
   public JocketInputStream(JocketReader reader, WaitStrategy wait) {
