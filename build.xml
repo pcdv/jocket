@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project name="jocket" default="jar">
 
-	<property name="version" value="0.3.0" />
+	<property name="version" value="0.4.0pre1" />
 
-	<target name="dist" depends="clean, jar">
+	<target name="dist" depends="clean, jni, jar">
+	</target>
+
+	<target name="jni" depends="javac">
+	  <exec dir="src/main/c" command="make"></exec>
 	</target>
 
 	<target name="jar" depends="javac">
