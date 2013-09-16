@@ -56,6 +56,13 @@ public class JocketFile implements Const {
     if (create) {
       int size = capacity + PACKET_INFO + maxPackets * LEN_PACKET_INFO;
       io.setLength(0);
+
+      // append data instead of just setting the size: in case we are using
+      // a real filesystem, this could avoid getting a fragmented file
+      // (or not)
+      for (int i = 0; i < size; i += 1024) {
+        io.write(new byte[1024]);
+      }
       io.setLength(size);
     }
 
