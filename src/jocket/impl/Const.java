@@ -13,10 +13,12 @@ public interface Const {
 
   int META_CAPACITY = META + 4;
 
+  int FUTEX = META + _CACHELINE;
+
   /**
    * Position at which the writer puts its sequence number.
    */
-  int WSEQ = META + _CACHELINE;
+  int WSEQ = FUTEX + _CACHELINE;
 
   /**
    * Position at which the reader puts its sequence number.

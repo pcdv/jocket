@@ -1,10 +1,20 @@
 package jocket.impl;
 
 import java.nio.ByteBuffer;
+import java.nio.MappedByteBuffer;
+
+import jocket.futex.Futex;
+import jocket.wait.BusyYieldSleep;
+import jocket.wait.FutexWaitStrategy;
+import jocket.wait.WaitStrategy;
 
 public class JocketReader extends AbstractJocketBuffer {
 
   private int rseq;
+
+  private int wseqc;
+
+  private WaitStrategy waiter = new BusyYieldSleep();
 
   public JocketReader(ByteBuffer buf, int npackets) {
     super(buf, npackets);
@@ -92,5 +102,14 @@ public class JocketReader extends AbstractJocketBuffer {
       return end - start;
     else
       return capacity - (start - end);
+  }
+
+  public void useFutex() {
+    this.waiter = new FutexWaitStrategy(
+                                        new Futex((MappedByteBuffer) buf, FUTEX));
+  }
+
+  public WaitStrategy getWaitStrategy() {
+    return waiter;
   }
 }
