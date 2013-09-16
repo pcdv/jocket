@@ -6,6 +6,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.util.concurrent.locks.LockSupport;
 
 import jocket.net.JocketSocket;
 
@@ -60,6 +61,9 @@ public final class BenchClient implements Settings {
       long start = System.nanoTime();
       iter(BATCH);
       nanos[i] = (System.nanoTime() - start) / BATCH;
+
+      if (PAUSE > 0)
+        LockSupport.parkNanos(PAUSE);
     }
     time = System.currentTimeMillis() - time;
 

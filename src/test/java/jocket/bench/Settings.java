@@ -14,5 +14,7 @@ public interface Settings {
 
   int WARMUP = Integer.getInteger("warmup", 50000);
 
+  long PAUSE = Long.getLong("pause", 0);
+
   String OUTPUT_FILE = USE_JOCKET ? "Jocket" : "Socket";
 }
