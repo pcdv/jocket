@@ -18,7 +18,7 @@
 
 	<target name="javac">
 		<mkdir dir="classes" />
-		<javac destdir="classes" includeantruntime="false" srcdir="src:test" excludes="**/test/*" />
+    <javac destdir="classes" includeantruntime="false" srcdir="src/main/java:src/test/java" excludes="**/test/*" />
 	</target>
 
 	<target name="test" depends="javac-test">
@@ -28,7 +28,7 @@
         <pathelement location="classes"/>
       </classpath>
 			<batchtest>
-        <fileset dir="test" includes="jocket/test/*" />
+        <fileset dir="src/test/java" includes="jocket/src/test/java/*" />
 			</batchtest>
 		</junit>
 	</target>
@@ -39,7 +39,7 @@
 
 	<target name="javac-test" depends="javac">
 		<echo>NB: To build JUnits, junit jar must be copied in lib/ directory </echo>
-		<javac destdir="classes" includeantruntime="false" srcdir="test" includes="**/test/*" classpathref="libs" />
+    <javac destdir="classes" includeantruntime="false" srcdir="src/test/java" includes="**/test/*" classpathref="libs" />
 	</target>
 
 	<target name="clean">
