@@ -1,6 +1,9 @@
 package jocket.impl;
 
 import java.nio.ByteBuffer;
+import java.nio.MappedByteBuffer;
+
+import jocket.futex.Futex;
 
 public final class JocketWriter extends AbstractJocketBuffer {
 
@@ -17,14 +20,19 @@ public final class JocketWriter extends AbstractJocketBuffer {
   private boolean dirty;
 
   /**
-   * Optional packet alignment.
+   * Optional packet alignment. By default we align on cache lines to avoid
+   * having several packets in the same cache line, which would cause false
+   * sharing (reader and writer threads would access the same line
+   * concurrently).
    */
-  private int align = 64;
+  private int align = _CACHELINE;
 
   /**
-   * Used to modulo on align.
+   * Used to modulo on align size.
    */
-  private int alignMask = 63;
+  private int alignMask = _CACHELINE - 1;
+
+  private Futex futex;
 
   public JocketWriter(ByteBuffer buf, int npackets) {
     super(buf, npackets);
@@ -100,6 +108,8 @@ public final class JocketWriter extends AbstractJocketBuffer {
         this.pstart = pend;
 
       dirty = false;
+      if (futex != null)
+        futex.signal();
     }
   }
 
@@ -137,12 +147,21 @@ public final class JocketWriter extends AbstractJocketBuffer {
    * <li>head + capacity - (head - head % capacity)
    * <li>tail + capacity
    * </ul>
+   * <p>
+   * This method works only if pend/pstart are reset to 0 when the reader has
+   * read everything (otherwise 0 can be returned instead of capacity).
    *
    * @param rseq sequence number of reader
    * @param head position of last written byte
    */
   private int getAvailableSpace(int rseq, int head) {
     return Math.min(start(rseq), head - (head & dataMask)) + capacity - head;
+
+    // NB: this is the contracted form of:
+    // -----------------------------------
+    // int lim1 = head + capacity - (head & dataMask);
+    // int lim2 = start(rseq) + capacity;
+    // return Math.min(lim1, lim2) - head;
   }
 
   /**
@@ -198,5 +217,9 @@ public final class JocketWriter extends AbstractJocketBuffer {
                 head(rseq()),
                 pend > pstart,
                 capacity);
+  }
+
+  public void useFutex() {
+    this.futex = new Futex((MappedByteBuffer) buf, FUTEX);
   }
 }

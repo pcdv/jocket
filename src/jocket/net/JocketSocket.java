@@ -11,6 +11,7 @@ import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.util.Vector;
 
+import jocket.futex.Futex;
 import jocket.impl.JocketInputStream;
 import jocket.impl.JocketOutputStream;
 import jocket.impl.JocketReader;
@@ -82,6 +83,12 @@ public class JocketSocket {
 
     this.reader = jfr.reader();
     this.writer = jfw.writer();
+
+    if (Futex.isAvailable()) {
+      writer.useFutex();
+      reader.useFutex();
+    }
+
     this.output = new JocketOutputStream(writer);
     this.input = new JocketInputStream(reader);
 

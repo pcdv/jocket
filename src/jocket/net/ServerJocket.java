@@ -10,6 +10,8 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 
+import jocket.futex.Futex;
+
 public class ServerJocket implements Closeable {
 
   private static final int DEFAULT_MAX_PACKETS = Integer
@@ -90,6 +92,11 @@ public class ServerJocket implements Closeable {
       // TODO: write parameters in file header (+ misc meta data)
       JocketFile fw = new JocketFile(maxPackets, capacity);
       JocketFile fr = new JocketFile(maxPackets, capacity);
+
+      if (Futex.isAvailable()) {
+        fw.writer().useFutex();
+        fr.reader().useFutex();
+      }
 
       out.writeUTF(fw.getPath());
       out.writeUTF(fr.getPath());
