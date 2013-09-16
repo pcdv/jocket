@@ -61,21 +61,32 @@ InputStream in = sock.getInputStream();
 OutputStream out = sock.getOutputStream();
 ```
 
-Otherwise, Jocket readers and writers have their own API allowing to perform non-blocking read/writes, potentially faster than with input/output streams.
+Otherwise, Jocket readers and writers have their own API allowing to perform non-blocking read/writes, 
+potentially faster than with input/output streams.
 
 
-Known issues
-------------
+Running the benchmarks
+----------------------
 
-### Spinning vs Sleeping
+Server:
+```
+java -cp jocket-0.4.0.jar jocket.bench.BenchServer
+```
 
-The JocketSocket API transforms a non-blocking API into a blocking API. When data can't be read or written, the program must wait. The default waiting strategy is to spin, then yield(), then parkNanos(), then Thread.sleep().
+Client:
+```
+java -cp jocket-0.4.0.jar jocket.bench.BenchClient
+```
 
-This has the following disadvantages:
- - high CPU usage for a small amount of time
- - greater latency after a while
+The following system properties are available in the client:
+ - -Dtcp=true : uses a normal socket instead of Jocket (default=false) [NB: must also be set on server side]
+ - -Dreps=1000 : sets the number of repetitions to 1000 (default=300000)
+ - -Dpause=1000 : pauses for 1000 nanoseconds between each rep (default=0)
+ - -DreplySize=4096 : sets the size of the PONG reply (default=1024)
+ - -Dwarmup=0 : sets the number of reps during warmup to 0 (default=50000)
+ - -Dport=1234 : use port 1234 (default=3333)
 
-Next release will include a new notification/waiting strategy based on futex'es (so will be available only on Linux).
+The client outputs a file /tmp/Jocket or /tmp/Socket which can be fed into Gnuplot, Excel etc.
 
 Credits
 -------
@@ -85,6 +96,11 @@ This project takes some ideas from @mjpt777 and @peter-lawrey
 
 Changes
 -------
+
+### 0.4.0
+
+Includes a new waiting strategy based on a [Futex](http://en.wikipedia.org/wiki/Futex). This avoids too heavy spinning and
+keeps latency low even no data has been received for a long time.
 
 ### 0.3.0
 
