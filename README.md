@@ -65,7 +65,7 @@ Otherwise, Jocket readers and writers have their own API allowing to perform non
 potentially faster than with input/output streams.
 
 
-Running the benchmarks
+Running the benchmark
 ----------------------
 
 Server:
@@ -86,7 +86,8 @@ The following system properties are available in the client:
  - -Dwarmup=0 : sets the number of reps during warmup to 0 (default=50000)
  - -Dport=1234 : use port 1234 (default=3333)
 
-The client outputs a file /tmp/Jocket or /tmp/Socket which can be fed into Gnuplot, Excel etc.
+The client outputs a file /tmp/Jocket or /tmp/Socket which can be fed into Gnuplot, Excel etc. Each line contains
+the number of microseconds taken between the emission of the PING request and the reception of the PONG reply.
 
 Credits
 -------
