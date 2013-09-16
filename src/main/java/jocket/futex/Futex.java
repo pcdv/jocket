@@ -21,6 +21,7 @@ public class Futex {
     }
     catch (UnsatisfiedLinkError e) {
       libAvailable = false;
+      System.err.println("WARN: JNI futex lib is NOT available");
     }
   }
 
