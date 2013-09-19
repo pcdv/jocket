@@ -8,6 +8,7 @@ import java.io.PrintWriter;
 import java.net.Socket;
 import java.util.concurrent.locks.LockSupport;
 
+import jocket.futex.Futex;
 import jocket.net.JocketSocket;
 
 /**
@@ -47,30 +48,39 @@ public final class BenchClient implements Settings {
    */
   public void bench() throws IOException {
 
-    long time = System.currentTimeMillis();
     out.writeInt(REPS * BATCH + WARMUP);
     out.writeInt(REPLY_SIZE);
 
     System.out.println("Warmup");
-    for (int i = 0; i < WARMUP; i++) {
-      iter(1);
-    }
+    doRun(WARMUP);
+    System.out.println("Go");
+    long time = doRun(REPS);
 
-    System.out.println("Starting " + REPS + " iterations");
-    for (int i = 0; i < REPS; i++) {
-      long start = System.nanoTime();
+    System.out.printf("Done in %dms. Dumping results in %s\n",
+                      time,
+                      OUTPUT_FILE);
+
+    dumpResults(OUTPUT_FILE);
+  }
+
+  private long doRun(int reps) throws IOException {
+    long time = System.currentTimeMillis();
+    System.out.println("Starting " + reps + " iterations");
+    for (int i = 0; i < reps; i++) {
+
+      long nanos = Futex.rdtsc();
       iter(BATCH);
-      nanos[i] = (System.nanoTime() - start) / BATCH;
+      nanos = (Futex.rdtsc() - nanos) / BATCH;
+
+      if (i < REPS)
+        this.nanos[i] = nanos;
 
       if (PAUSE > 0)
         LockSupport.parkNanos(PAUSE);
     }
     time = System.currentTimeMillis() - time;
 
-    System.out.printf("Done in %dms. Dumping results in %s\n",
-                      time,
-                      OUTPUT_FILE);
-    dumpResults(OUTPUT_FILE);
+    return time;
   }
 
   public void iter(int batch) throws IOException {

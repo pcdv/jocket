@@ -7,7 +7,7 @@ public class BusyYieldSleep implements WaitStrategy {
   private int counter;
 
   @Override
-  public void pause() {
+  public void pause(int seq) {
     int counter = this.counter++;
     if (counter < 10000)
       return;

@@ -173,6 +173,7 @@ public class TestJocket extends AbstractJocketTest {
   }
 
   @Test
+  @Deprecated
   public void testAutoReset() throws Exception {
     init(128, 8);
     r.setResetSeqNum(0);
@@ -191,6 +192,7 @@ public class TestJocket extends AbstractJocketTest {
   }
 
   @Test
+  @Deprecated
   public void testAutoReset2() throws Exception {
     init(128, 8);
     r.setResetSeqNum(0);

@@ -43,7 +43,7 @@ public final class BenchServer implements Settings {
 
   private void run(final DataInputStream din, final OutputStream out)
       throws IOException {
-    final int reps = din.readInt();
+    /*final int reps =*/ din.readInt();
     final int replySize = din.readInt();
     final byte[] buf = new byte[Math.max(4, replySize)];
     while (true) {
