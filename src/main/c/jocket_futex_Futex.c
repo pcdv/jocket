@@ -16,6 +16,21 @@ extern "C" {
       return (jlong) (*env)->GetDirectBufferAddress(env, buf);
     }
 
+  JNIEXPORT void JNICALL Java_jocket_futex_Futex_pause
+    (JNIEnv *env, jclass cls, jlong futAddr, jlong seqAddr, jint oldseq)
+    {
+      jint *seqPtr = (jint *)seqAddr;
+      unsigned short i;
+
+      for (i = 0; i < 16000 && *seqPtr == oldseq; i++) {
+        if (i < 10)
+          asm("pause");
+        else  {
+          Java_jocket_futex_Futex_signal0(env, cls, futAddr);
+        }
+      }
+    }
+
   JNIEXPORT void JNICALL Java_jocket_futex_Futex_signal0
     (JNIEnv *env, jclass cls, jlong addr)
     {
@@ -37,6 +52,35 @@ extern "C" {
         syscall(SYS_futex, (jint *)addr, FUTEX_WAIT, -1, NULL, NULL, 0);
       }
     }
+
+  JNIEXPORT void JNICALL Java_jocket_futex_Futex_x86pause
+    (JNIEnv *env, jclass cls)
+    {
+      asm("pause");
+    }
+
+
+
+#if defined(__i386__)
+static __inline__ unsigned long long rdtsc(void) {
+  unsigned long long int x;
+     __asm__ volatile (".byte 0x0f, 0x31" : "=A" (x));
+     return x;
+}
+
+#elif defined(__x86_64__)
+static __inline__ unsigned long long rdtsc(void) {
+  unsigned hi, lo;
+  __asm__ __volatile__ ("rdtsc" : "=a"(lo), "=d"(hi));
+  return ( (unsigned long long)lo)|( ((unsigned long long)hi)<<32 );
+}
+
+#endif
+
+JNIEXPORT jlong JNICALL Java_jocket_futex_Futex_rdtsc
+  (JNIEnv *env, jclass c) {
+  return (jlong) rdtsc();
+}
 
 #ifdef __cplusplus
 }

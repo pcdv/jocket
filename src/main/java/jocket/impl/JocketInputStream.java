@@ -3,20 +3,12 @@ package jocket.impl;
 import java.io.IOException;
 import java.io.InputStream;
 
-import jocket.wait.WaitStrategy;
-
 public class JocketInputStream extends InputStream {
 
   private final JocketReader reader;
-  private final WaitStrategy wait;
 
   public JocketInputStream(JocketReader reader) {
-    this(reader, reader.getWaitStrategy());
-  }
-
-  public JocketInputStream(JocketReader reader, WaitStrategy wait) {
     this.reader = reader;
-    this.wait = wait;
   }
 
   @Override
@@ -31,16 +23,7 @@ public class JocketInputStream extends InputStream {
 
   @Override
   public int read(byte[] b, int off, int len) {
-    int read = 0;
-    for (;;) {
-      read = reader.read(b, off, len);
-      if (read != 0) {
-        wait.reset();
-        break;
-      } else
-        wait.pause();
-    }
-    return read;
+    return reader.readBlocking(b, off, len);
   }
 
   @Override

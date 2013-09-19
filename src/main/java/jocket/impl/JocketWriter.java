@@ -220,6 +220,6 @@ public final class JocketWriter extends AbstractJocketBuffer {
   }
 
   public void useFutex() {
-    this.futex = new Futex((MappedByteBuffer) buf, FUTEX);
+    this.futex = new Futex((MappedByteBuffer) buf, FUTEX, -1);
   }
 }
