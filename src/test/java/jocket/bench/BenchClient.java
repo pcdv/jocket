@@ -6,9 +6,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.util.Arrays;
 import java.util.concurrent.locks.LockSupport;
 
-import jocket.futex.Futex;
 import jocket.net.JocketSocket;
 
 /**
@@ -33,8 +33,7 @@ public final class BenchClient implements Settings {
       JocketSocket s = new JocketSocket(PORT);
       in = new DataInputStream(s.getInputStream());
       out = new DataOutputStream(s.getOutputStream());
-    }
-    else {
+    } else {
       @SuppressWarnings("resource")
       Socket s = new Socket("localhost", PORT);
       s.setTcpNoDelay(true);
@@ -51,32 +50,30 @@ public final class BenchClient implements Settings {
     out.writeInt(REPS * BATCH + WARMUP);
     out.writeInt(REPLY_SIZE);
 
-    System.out.println("Warmup");
-    doRun(WARMUP);
-    System.out.println("Go");
-    long time = doRun(REPS);
+    System.out.printf("Warmup (%d) ... \n", WARMUP);
+    doRun(WARMUP, 1);
+    System.out.printf("Running test (%d) ...\n", REPS);
+    long time = doRun(REPS, PAUSE);
 
-    System.out.printf("Done in %dms. Dumping results in %s\n",
-                      time,
-                      OUTPUT_FILE);
+    System.out.printf("Done in %dms. Dumping results in %s\n", time,
+        OUTPUT_FILE);
 
     dumpResults(OUTPUT_FILE);
   }
 
-  private long doRun(int reps) throws IOException {
+  private long doRun(int reps, long pauseNanos) throws IOException {
     long time = System.currentTimeMillis();
-    System.out.println("Starting " + reps + " iterations");
     for (int i = 0; i < reps; i++) {
 
-      long nanos = Futex.rdtsc();
+      long nanos = System.nanoTime();
       iter(BATCH);
-      nanos = (Futex.rdtsc() - nanos) / BATCH;
+      nanos = (System.nanoTime() - nanos) / BATCH;
 
       if (i < REPS)
         this.nanos[i] = nanos;
 
-      if (PAUSE > 0)
-        LockSupport.parkNanos(PAUSE);
+      if (pauseNanos > 0)
+        LockSupport.parkNanos(pauseNanos);
     }
     time = System.currentTimeMillis() - time;
 
@@ -91,11 +88,27 @@ public final class BenchClient implements Settings {
     }
   }
 
+  private static final double[] PTILES = { 1, 10, 50, 99, 99.9, 99.99, 99.999,
+      99.9999 };
+
   private void dumpResults(String fileName) throws IOException {
+    long[] sorted = nanos.clone();
+    Arrays.sort(sorted);
+
     PrintWriter w = new PrintWriter(new FileOutputStream("/tmp/" + fileName));
     for (int i = 0; i < nanos.length; i++)
-      w.println(nanos[i] / 1000.0);
+      w.println((nanos[i] / 1000.0) + "\t" + (sorted[i] / 1000.0));
     w.close();
+
+    for (double pc : PTILES) {
+      logPctile(pc, sorted, 0.001, "us");
+    }
+  }
+
+  private void logPctile(double pc, long[] sorted, double factor, String unit) {
+    int index = (int) (pc / 100 * sorted.length);
+    System.out.printf("%-12s  (%7d) : %8.2f (%s)\n", pc + "%",
+        sorted.length - index, sorted[index] * factor, unit);
   }
 
   public static void main(String[] args) throws IOException {
