@@ -188,6 +188,8 @@ public final class JocketWriter extends AbstractJocketBuffer {
   protected void close0() {
     buf.putInt(WSEQ, -1);
     writeMemoryBarrier();
+    if (futex != null)
+      futex.signal(-1);
   }
 
   /**
