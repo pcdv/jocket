@@ -11,6 +11,7 @@ jocket_futex_Futex.h:
 
 lib: $(OBJ)
 	gcc -shared -o $(LIB) $(OBJ) -lc -lrt
+	mkdir -p ../../../classes
 	cp $(LIB) ../../../classes
 
 clean:

@@ -19,15 +19,19 @@ extern "C" {
   JNIEXPORT void JNICALL Java_jocket_futex_Futex_pause
     (JNIEnv *env, jclass cls, jlong futAddr, jlong seqAddr, jint oldseq)
     {
+      unsigned int i = 0;
       jint *seqPtr = (jint *)seqAddr;
-      unsigned short i;
-
-      for (i = 0; i < 16000 && *seqPtr == oldseq; i++) {
-        if (i < 10)
-          asm("pause");
-        else  {
-          Java_jocket_futex_Futex_signal0(env, cls, futAddr);
+      printf("p\n");
+      for (i = 0; i < 510 && *seqPtr == oldseq; i++) {
+//        printf("pause\n");
+        if (i >= 500) {
+        printf("wait futex\n");
+          Java_jocket_futex_Futex_await0(env, cls, futAddr);
+        printf("done %d %d\n", oldseq, *seqPtr);
+          break;
         }
+        asm("pause");
+        __sync_synchronize();
       }
     }
 
@@ -37,7 +41,8 @@ extern "C" {
       jint *ptr = (jint *)addr;
       // a value of -1 implies that a thread is waiting
       if (__sync_val_compare_and_swap(ptr, 0, 1) == -1) {
-        *ptr = 0;
+//        *ptr = 0;
+        if (__sync_val_compare_and_swap(ptr, -1, 0) == -1)
         syscall(SYS_futex, (jint *)addr, FUTEX_WAKE, 0, NULL, NULL, 0);
       }
     }
@@ -47,10 +52,17 @@ extern "C" {
     {
       // TODO: add timeout parameter to avoid infinite wait
       jint *ptr = (jint *)addr;
+      const struct timespec timeout = { 0, 100000000 };
+
       // a value other than 0 indicates that data became available => no wait
-      if (__sync_val_compare_and_swap(ptr, 0, -1) == 0) {
+      int val = __sync_val_compare_and_swap(ptr, 0, -1); 
+      //printf("val = %d\n", val);
+      if (val == 0) {
+        printf("WAIT\n");
         syscall(SYS_futex, (jint *)addr, FUTEX_WAIT, -1, NULL, NULL, 0);
+        printf("AWAKE\n");
       }
+      else printf("Not waiting: val = %d\n", val);
     }
 
   JNIEXPORT void JNICALL Java_jocket_futex_Futex_x86pause
