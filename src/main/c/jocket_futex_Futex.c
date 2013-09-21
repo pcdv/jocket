@@ -47,7 +47,7 @@ extern "C" {
     {
       // TODO: add timeout parameter to avoid infinite wait
       jint *ptr = (jint *)addr;
-      const struct timespec timeout = { 0, 100000000 };
+      const struct timespec timeout = { 1, 0 };
 
       // a value other than 0 indicates that data became available => no wait
       int val = __sync_val_compare_and_swap(ptr, 0, -1); 
