@@ -21,13 +21,9 @@ extern "C" {
     {
       unsigned int i = 0;
       jint *seqPtr = (jint *)seqAddr;
-      printf("p\n");
       for (i = 0; i < 510 && *seqPtr == oldseq; i++) {
-//        printf("pause\n");
         if (i >= 500) {
-        printf("wait futex\n");
           Java_jocket_futex_Futex_await0(env, cls, futAddr);
-        printf("done %d %d\n", oldseq, *seqPtr);
           break;
         }
         asm("pause");
@@ -41,8 +37,7 @@ extern "C" {
       jint *ptr = (jint *)addr;
       // a value of -1 implies that a thread is waiting
       if (__sync_val_compare_and_swap(ptr, 0, 1) == -1) {
-//        *ptr = 0;
-        if (__sync_val_compare_and_swap(ptr, -1, 0) == -1)
+        *ptr = 0;
         syscall(SYS_futex, (jint *)addr, FUTEX_WAKE, 0, NULL, NULL, 0);
       }
     }
@@ -56,13 +51,10 @@ extern "C" {
 
       // a value other than 0 indicates that data became available => no wait
       int val = __sync_val_compare_and_swap(ptr, 0, -1); 
-      //printf("val = %d\n", val);
       if (val == 0) {
-        printf("WAIT\n");
-        syscall(SYS_futex, (jint *)addr, FUTEX_WAIT, -1, NULL, NULL, 0);
-        printf("AWAKE\n");
+        syscall(SYS_futex, (jint *)addr, FUTEX_WAIT, -1, timeout, NULL, 0);
       }
-      else printf("Not waiting: val = %d\n", val);
+      else *ptr = 0;
     }
 
   JNIEXPORT void JNICALL Java_jocket_futex_Futex_x86pause
