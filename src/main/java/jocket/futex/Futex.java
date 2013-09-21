@@ -39,7 +39,6 @@ public class Futex implements WaitStrategy {
   }
 
   public void signal(int seq) {
-    System.out.println("Signaling "+seq);
     signal0(futAddr);
   }
 
