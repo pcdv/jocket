@@ -109,7 +109,7 @@ public final class JocketWriter extends AbstractJocketBuffer {
 
       dirty = false;
       if (futex != null)
-        futex.signal();
+        futex.signal(wseq);
     }
   }
 

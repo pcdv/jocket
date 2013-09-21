@@ -30,14 +30,16 @@ public class Futex implements WaitStrategy {
 
   private static long computeAddress(MappedByteBuffer b, int pos) {
     try {
-      return getAddress(b) + pos / UnsafeUtil.unsafe().addressSize();
+      int addressSize = 1;// UnsafeUtil.unsafe().addressSize();
+      return getAddress(b) + pos / addressSize;
     }
     catch (Exception e) {
       throw new RuntimeException(e);
     }
   }
 
-  public void signal() {
+  public void signal(int seq) {
+    System.out.println("Signaling "+seq);
     signal0(futAddr);
   }
 
