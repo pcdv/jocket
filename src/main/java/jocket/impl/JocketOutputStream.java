@@ -31,7 +31,7 @@ public class JocketOutputStream extends OutputStream {
       len -= written;
       off += written;
       if (written == 0)
-        wait.pause(0);
+        wait.pauseWhile(0);
     }
     wait.reset();
   }

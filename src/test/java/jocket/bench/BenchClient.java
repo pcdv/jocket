@@ -33,7 +33,8 @@ public final class BenchClient implements Settings {
       JocketSocket s = new JocketSocket(PORT);
       in = new DataInputStream(s.getInputStream());
       out = new DataOutputStream(s.getOutputStream());
-    } else {
+    }
+    else {
       @SuppressWarnings("resource")
       Socket s = new Socket("localhost", PORT);
       s.setTcpNoDelay(true);
@@ -50,18 +51,20 @@ public final class BenchClient implements Settings {
     out.writeInt(REPS * BATCH + WARMUP);
     out.writeInt(REPLY_SIZE);
 
-    System.out.printf("Warmup (%d) ... \n", WARMUP);
-    doRun(WARMUP, 1);
-    System.out.printf("Running test (%d) ...\n", REPS);
-    long time = doRun(REPS, PAUSE);
+    doRun("Warming up", WARMUP, PAUSE > 0 ? 1 : 0);
+    doRun("Running test", REPS, PAUSE);
 
-    System.out.printf("Done in %dms. Dumping results in %s\n", time,
-        OUTPUT_FILE);
-
-    dumpResults(OUTPUT_FILE);
+    if (!NOSTATS) {
+      System.out.printf("Dumping results in /tmp/%s\n", OUTPUT_FILE);
+      dumpResults(OUTPUT_FILE);
+    }
   }
 
-  private long doRun(int reps, long pauseNanos) throws IOException {
+  private long doRun(String msg, int reps, long pauseNanos) throws IOException {
+    System.out.printf("%-15s: %10d reps, pause between reps: %dns...",
+                      msg,
+                      reps,
+                      pauseNanos);
     long time = System.currentTimeMillis();
     for (int i = 0; i < reps; i++) {
 
@@ -77,6 +80,7 @@ public final class BenchClient implements Settings {
     }
     time = System.currentTimeMillis() - time;
 
+    System.out.printf(" done in %dms\n", time);
     return time;
   }
 
@@ -89,7 +93,7 @@ public final class BenchClient implements Settings {
   }
 
   private static final double[] PTILES = { 1, 10, 50, 99, 99.9, 99.99, 99.999,
-      99.9999 };
+    99.9999 };
 
   private void dumpResults(String fileName) throws IOException {
     long[] sorted = nanos.clone();
@@ -107,8 +111,11 @@ public final class BenchClient implements Settings {
 
   private void logPctile(double pc, long[] sorted, double factor, String unit) {
     int index = (int) (pc / 100 * sorted.length);
-    System.out.printf("%-12s  (%7d) : %8.2f (%s)\n", pc + "%",
-        sorted.length - index, sorted[index] * factor, unit);
+    System.out.printf("%-12s  (%7d) : %8.2f (%s)\n",
+                      pc + "%",
+                      sorted.length - index,
+                      sorted[index] * factor,
+                      unit);
   }
 
   public static void main(String[] args) throws IOException {
