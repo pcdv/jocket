@@ -17,4 +17,6 @@ public interface Settings {
   long PAUSE = Long.getLong("pause", 0);
 
   String OUTPUT_FILE = USE_JOCKET ? "Jocket" : "Socket";
+
+  boolean NOSTATS = Boolean.getBoolean("nostats");
 }

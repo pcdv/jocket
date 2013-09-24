@@ -10,21 +10,46 @@
 extern "C" {
 #endif
 
+//#define DEBUG 1
+
   JNIEXPORT jlong JNICALL Java_jocket_futex_Futex_getAddress
     (JNIEnv *env, jclass cls, jobject buf)
     {
       return (jlong) (*env)->GetDirectBufferAddress(env, buf);
     }
 
+JNIEXPORT jint JNICALL Java_jocket_futex_Futex_getInt0
+  (JNIEnv *env, jclass cls, jlong addr) 
+  {
+      jint* seqPtr = (jint *)addr;
+      return *seqPtr;
+ }
+
+JNIEXPORT void JNICALL Java_jocket_futex_Futex_setInt0
+  (JNIEnv *env, jclass cls, jlong addr, jint val)
+  {
+        jint* seqPtr = (jint *)addr;
+        *seqPtr = val;
+  }
+
+
   JNIEXPORT void JNICALL Java_jocket_futex_Futex_pause
     (JNIEnv *env, jclass cls, jlong futAddr, jlong seqAddr, jint oldseq)
     {
       unsigned int i = 0;
-      jint *seqPtr = (jint *)seqAddr;
-      for (i = 0; i < 510 && *seqPtr == oldseq; i++) {
-        if (i >= 500) {
+      jint* seqPtr = (jint *)seqAddr;
+      
+#ifdef DEBUG
+      printf("%ld %ld %d\n", futAddr, seqAddr, oldseq);
+      printf("Futex_pause() %ld old=%d cur=%d\n", futAddr, oldseq, *seqPtr);
+      fflush(stdout);
+#endif
+      for (i = 0; *seqPtr == oldseq; i++) {
+        if (i >= 1000) {
           Java_jocket_futex_Futex_await0(env, cls, futAddr);
-          break;
+      #ifdef DEBUG
+          printf("Futex_pause() : futex wait finished - now %d\n", *seqPtr);
+      #endif
         }
         asm("pause");
         __sync_synchronize();
@@ -42,19 +67,22 @@ extern "C" {
       }
     }
 
+
   JNIEXPORT void JNICALL Java_jocket_futex_Futex_await0
     (JNIEnv *env, jclass cls, jlong addr)
     {
       // TODO: add timeout parameter to avoid infinite wait
-      jint *ptr = (jint *)addr;
-      const struct timespec timeout = { 0, 100000000 };
+      jint* ptr = (jint*)addr;
+      //const struct timespec SECOND = { 1, 0 };
 
       // a value other than 0 indicates that data became available => no wait
       int val = __sync_val_compare_and_swap(ptr, 0, -1); 
       if (val == 0) {
-        syscall(SYS_futex, (jint *)addr, FUTEX_WAIT, -1, timeout, NULL, 0);
+        syscall(SYS_futex, (jint *)addr, FUTEX_WAIT, -1, NULL, NULL, 0);
       }
-      else *ptr = 0;
+      else  {
+        *ptr = 0;
+      }
     }
 
   JNIEXPORT void JNICALL Java_jocket_futex_Futex_x86pause
