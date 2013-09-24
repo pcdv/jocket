@@ -1,5 +1,5 @@
 INCLUDES=-I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/linux
-CC = gcc $(INCLUDES) -Wall -fpic
+CC = gcc -O2 $(INCLUDES) -Wall -fpic
 ARCH := $(shell getconf LONG_BIT)
 OBJ = jocket_futex_Futex.o
 LIB = libJocketFutex$(ARCH).so
@@ -10,7 +10,8 @@ jocket_futex_Futex.h:
 	javah -classpath ../../../classes jocket.futex.Futex
 
 lib: $(OBJ)
-	gcc -shared -o $(LIB) $(OBJ) -lc 
+	gcc -shared -o $(LIB) $(OBJ) -lc -lrt
+	mkdir -p ../../../classes
 	cp $(LIB) ../../../classes
 
 clean:

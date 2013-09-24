@@ -1,34 +1,49 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project name="jocket" default="jar">
+<project name="jocket" default="dist">
 
-	<property name="version" value="0.4.0" />
+	<property name="version" value="0.5.0pre1" />
 
-	<target name="dist" depends="clean, jni, jar">
+	<target name="dist" depends="clean, jni, jar-main, jar-bench">
 	</target>
 
-	<target name="jni" depends="javac">
-	  <exec dir="src/main/c" command="make"></exec>
-	</target>
-
-	<target name="jar" depends="javac">
-		<jar destfile="jocket-${version}.jar" >
-      <fileset dir="classes" includes="**"/>
-    </jar>
-	</target>
-
-	<target name="javac">
+	<target name="mkdir">
 		<mkdir dir="classes" />
-    <javac destdir="classes" includeantruntime="false" srcdir="src/main/java:src/test/java" excludes="**/test/*" />
+	</target>
+
+	<target name="jni" depends="javac-main">
+		<exec dir="src/main/c" command="make">
+		</exec>
+	</target>
+
+	<target name="jar-main" depends="javac-main">
+		<jar destfile="jocket-${version}.jar">
+			<fileset dir="classes" includes="**" excludes="*/test/** */bench/**" />
+		</jar>
+	</target>
+
+	<target name="jar-bench" depends="javac-bench">
+		<jar destfile="jocket-bench-${version}.jar">
+			<fileset dir="classes" includes="*/bench/**" />
+		</jar>
+	</target>
+
+	<target name="javac-main" depends="mkdir">
+		<javac destdir="classes" includeantruntime="false" srcdir="src/main/java" />
+	</target>
+
+	<target name="javac-bench" depends="javac-main">
+		<javac destdir="classes" includeantruntime="false" srcdir="src/test/java" excludes="**/test/*" />
 	</target>
 
 	<target name="test" depends="javac-test">
-		<junit showoutput="false">
-      <classpath refid="libs"/>
+		<junit showoutput="false" printsummary="false" >
 			<classpath>
-        <pathelement location="classes"/>
-      </classpath>
-			<batchtest>
-        <fileset dir="src/test/java" includes="jocket/src/test/java/*" />
+				<fileset dir="lib" includes="*.jar" />
+				<pathelement location="classes" />
+			</classpath>
+			<formatter type="plain" usefile="false" />
+			<batchtest haltonfailure="true">
+				<fileset dir="src/test/java" includes="*/test/Test*" />
 			</batchtest>
 		</junit>
 	</target>
@@ -37,9 +52,9 @@
 		<fileset dir="lib" includes="*.jar" />
 	</path>
 
-	<target name="javac-test" depends="javac">
+	<target name="javac-test" depends="javac-main">
 		<echo>NB: To build JUnits, junit jar must be copied in lib/ directory </echo>
-    <javac destdir="classes" includeantruntime="false" srcdir="src/test/java" includes="**/test/*" classpathref="libs" />
+		<javac destdir="classes" includeantruntime="false" srcdir="src/test/java" includes="**/test/*" classpathref="libs" />
 	</target>
 
 	<target name="clean">
