@@ -47,7 +47,6 @@ public class TestJocketSocket extends AbstractJocketSocketTest {
   public void testUnderflow() throws Exception {
     byte[] buf = new byte[300000];
     for (int i = 0; i < 100; i++) {
-      System.out.println(i);
       c.getOutputStream().write(buf);
       c.getWriter().flush();
       new DataInputStream(s.getInputStream()).readFully(buf);

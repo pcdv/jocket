@@ -116,4 +116,8 @@ public class JocketFile implements Const {
       return File.createTempFile("jocket", "");
     }
   }
+
+  public MappedByteBuffer getBuffer() {
+    return buf;
+  }
 }
