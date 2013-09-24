@@ -11,7 +11,7 @@
 	</target>
 
 	<target name="jni" depends="javac-main">
-        <exec dir="src/main/c" executable="make"/>
+		<exec dir="src/main/c" executable="make" />
 	</target>
 
 	<target name="jar-main" depends="javac-main">
@@ -35,7 +35,7 @@
 	</target>
 
 	<target name="test" depends="javac-test">
-		<junit showoutput="false" printsummary="false" >
+		<junit showoutput="false" printsummary="false">
 			<classpath>
 				<fileset dir="lib" includes="*.jar" />
 				<pathelement location="classes" />
@@ -60,8 +60,8 @@
 		<delete verbose="false" includeEmptyDirs="true" failonerror="false">
 			<fileset dir="classes" />
 		</delete>
-        <exec dir="src/main/c" executable="make">
-        	<arg value="clean"/>
+		<exec dir="src/main/c" executable="make">
+			<arg value="clean" />
 		</exec>
 	</target>
 
