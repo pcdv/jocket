@@ -37,7 +37,7 @@ public class JocketReader extends AbstractJocketBuffer {
         return read;
       }
       else {
-        waiter.pause(wseq);
+        waiter.pauseWhile(wseq);
       }
     }
   }

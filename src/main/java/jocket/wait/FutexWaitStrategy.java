@@ -13,7 +13,7 @@ public class FutexWaitStrategy implements WaitStrategy {
   }
 
   @Override
-  public void pause(int seq) {
+  public void pauseWhile(int seq) {
     final int counter = this.counter++;
     if (counter < 200) {
       Futex.x86pause();
