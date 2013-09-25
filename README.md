@@ -28,6 +28,21 @@ Currently, there are 2 APIs:
 
 The benchmark used to generate the above diagram is based on the JocketSocket API.
 
+How to build
+------------
+
+Just run the following commands to build Jocket and run the benchmark.
+
+NB: `$JAVA_HOME` must be set
+
+```
+git clone https://github.com/pcdv/jocket.git
+cd jocket
+ant
+./run-bench.sh
+./run-bench.sh -Dtcp=true
+```
+
 How it works
 ------------
 
