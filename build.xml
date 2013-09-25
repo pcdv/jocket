@@ -27,7 +27,7 @@
 	</target>
 
 	<target name="javac-main" depends="mkdir">
-		<javac destdir="classes" includeantruntime="false" srcdir="src/main/java" />
+		<javac destdir="classes" includeantruntime="false" srcdir="src/main/java" debug="on"/>
 	</target>
 
 	<target name="javac-bench" depends="javac-main">
