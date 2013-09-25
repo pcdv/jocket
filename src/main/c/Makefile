@@ -1,5 +1,5 @@
 INCLUDES=-I$(JAVA_HOME)/include -I$(JAVA_HOME)/include/linux
-CC = gcc -O2 $(INCLUDES) -Wall -fpic
+CC = gcc -O2 $(INCLUDES) -Wall -fpic -g -ggdb
 ARCH := $(shell getconf LONG_BIT)
 OBJ = jocket_futex_Futex.o
 LIB = libJocketFutex$(ARCH).so
