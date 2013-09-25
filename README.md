@@ -19,14 +19,6 @@ This benchmark was run on an Intel Core i5-2500.
 
 Jocket is young and still under development. It has been tested only on Linux.
 
-API
----
-
-Currently, there are 2 APIs:
- - JocketReader/JocketWriter: low-level, non blocking API
- - JocketSocket: high-level, blocking API mimicking java.net.Socket
-
-The benchmark used to generate the above diagram is based on the JocketSocket API.
 
 How to build
 ------------
@@ -42,6 +34,65 @@ ant
 ./run-bench.sh
 ./run-bench.sh -Dtcp=true
 ```
+
+The following options can be passed to the run-bench.sh script
+ - -Dtcp=true : uses a normal socket instead of Jocket (default=false)
+ - -Dreps=1000 : sets the number of repetitions to 1000 (default=300000)
+ - -Dpause=1000 : pauses for 1000 nanoseconds between each rep (default=0)
+ - -DreplySize=4096 : sets the size of the PONG reply (default=1024)
+ - -Dwarmup=0 : sets the number of reps during warmup to 0 (default=50000)
+ - -Dport=1234 : use port 1234 (default=3333)
+ - -Dnostats=true : do not record and dump latencies (useful if number of reps is too big)
+
+The client outputs a file /tmp/Jocket or /tmp/Socket which can be fed into Gnuplot, Excel etc. Each line contains
+the number of microseconds taken between the emission of the PING request and the reception of the PONG reply.
+
+
+Benchmark output
+----------------
+
+The output of the benchmark should look like:
+
+```
+$ ./run-bench.sh -Dreps=500000
+Jocket listening on 3333
+Warming up     :      50000 reps, pause between reps: 0ns... done in 114ms
+Running test   :     500000 reps, pause between reps: 0ns... done in 279ms
+Dumping results in /tmp/Jocket
+1.0%          ( 495000) :     0,50 (us)
+10.0%         ( 450000) :     0,52 (us)
+50.0%         ( 250000) :     0,53 (us)
+99.0%         (   5000) :     0,57 (us)
+99.9%         (    500) :     0,60 (us)
+99.99%        (     51) :     1,97 (us)
+99.999%       (      6) :     5,43 (us)
+99.9999%      (      1) :    15,57 (us)
+
+$ ./run-bench.sh -Dreps=500000 -Dtcp=true
+Java ServerSocket listening on 3333
+Warming up     :      50000 reps, pause between reps: 0ns... done in 737ms
+Running test   :     500000 reps, pause between reps: 0ns... done in 9597ms
+Dumping results in /tmp/Socket
+1.0%          ( 495000) :     9,42 (us)
+10.0%         ( 450000) :     9,79 (us)
+50.0%         ( 250000) :    20,62 (us)
+99.0%         (   5000) :    22,05 (us)
+99.9%         (    500) :    32,69 (us)
+99.99%        (     51) :   509,07 (us)
+99.999%       (      6) :  2128,08 (us)
+99.9999%      (      1) :  4546,98 (us)
+```
+
+
+API
+---
+
+Currently, there are 2 APIs:
+ - JocketReader/JocketWriter: low-level, non blocking API
+ - JocketSocket: high-level, blocking API mimicking java.net.Socket
+
+The benchmark used to generate the above diagram is based on the JocketSocket API.
+
 
 How it works
 ------------
@@ -93,16 +144,6 @@ Client:
 java -cp jocket-0.4.0.jar jocket.bench.BenchClient
 ```
 
-The following system properties are available in the client:
- - -Dtcp=true : uses a normal socket instead of Jocket (default=false) [NB: must also be set on server side]
- - -Dreps=1000 : sets the number of repetitions to 1000 (default=300000)
- - -Dpause=1000 : pauses for 1000 nanoseconds between each rep (default=0)
- - -DreplySize=4096 : sets the size of the PONG reply (default=1024)
- - -Dwarmup=0 : sets the number of reps during warmup to 0 (default=50000)
- - -Dport=1234 : use port 1234 (default=3333)
-
-The client outputs a file /tmp/Jocket or /tmp/Socket which can be fed into Gnuplot, Excel etc. Each line contains
-the number of microseconds taken between the emission of the PING request and the reception of the PONG reply.
 
 Credits
 -------
