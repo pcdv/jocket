@@ -9,47 +9,13 @@ Status
 
 Current benchmarks show a 10-100x performance improvement when compared to a standard socket.
 
-The following chart displays the RTT latency (in microseconds) between two processes:
- - the client sends a PING request (payload = 4 bytes)
- - the server replies with a PONG response (payload = 1024 bytes)
+![alt text](docs/bench.png "The thick red line is around 500 nanoseconds")
 
-![alt text](docs/bench.png "Latency for an 1kb PING. Red = Socket, green = Jocket. The thick green line is roughly between 0.50 and 0.56 microseconds")
+The chart above displays the RTT latency (in microseconds) between two processes:
+ - the client sends a PING (4 bytes)
+ - the server replies with a PONG (1024 bytes)
 
-This benchmark was run on an Intel Core i5-2500.
-
-Jocket is young and still under development. It has been tested only on Linux.
-
-
-How to build
-------------
-
-Just run the following commands to build Jocket and run the benchmark.
-
-NB: `$JAVA_HOME` must be set
-
-```
-git clone https://github.com/pcdv/jocket.git
-cd jocket
-ant
-./run-bench.sh
-./run-bench.sh -Dtcp=true
-```
-
-The following options can be passed to the run-bench.sh script
- - -Dtcp=true : uses a normal socket instead of Jocket (default=false)
- - -Dreps=1000 : sets the number of repetitions to 1000 (default=300000)
- - -Dpause=1000 : pauses for 1000 nanoseconds between each rep (default=0)
- - -DreplySize=4096 : sets the size of the PONG reply (default=1024)
- - -Dwarmup=0 : sets the number of reps during warmup to 0 (default=50000)
- - -Dport=1234 : use port 1234 (default=3333)
- - -Dnostats=true : do not record and dump latencies (useful if number of reps is too big)
-
-The client outputs a file /tmp/Jocket or /tmp/Socket which can be fed into Gnuplot, Excel etc. Each line contains
-the number of microseconds taken between the emission of the PING request and the reception of the PONG reply.
-
-
-Benchmark output
-----------------
+This benchmark was run on an Intel Core i5-2500 (4-core 3.30GHz).
 
 The output of the benchmark should look like:
 
@@ -83,6 +49,39 @@ Dumping results in /tmp/Socket
 99.9999%      (      1) :  4546,98 (us)
 ```
 
+NB: I'm still investigating on the latency spikes (they represent less than 0.01% of the test iterations). Any help is appreciated BTW :)
+
+The following options can be passed to the run-bench.sh script
+ - -Dtcp=true : uses a normal socket instead of Jocket (default=false)
+ - -Dreps=1000 : sets the number of repetitions to 1000 (default=300000)
+ - -Dpause=1000 : pauses for 1000 nanoseconds between each rep (default=0)
+ - -DreplySize=4096 : sets the size of the PONG reply (default=1024)
+ - -Dwarmup=0 : sets the number of reps during warmup to 0 (default=50000)
+ - -Dport=1234 : use port 1234 (default=3333)
+ - -Dnostats=true : do not record and dump latencies (useful if number of reps is too big)
+
+The client outputs a file /tmp/Jocket or /tmp/Socket which can be fed into Gnuplot, Excel etc. 
+
+__Example with gnuplot:__
+
+```
+plot '/tmp/Jocket' using 1 with lines title 'Jocket', '/tmp/Socket' using 1 with lines title 'TCP (loopback)'
+```
+
+How to build
+------------
+
+Just run the following commands to build Jocket and run the benchmark.
+
+NB: `$JAVA_HOME` must be set to a valid JDK directory.
+
+```
+git clone https://github.com/pcdv/jocket.git
+cd jocket
+ant
+./run-bench.sh
+./run-bench.sh -Dtcp=true
+```
 
 API
 ---
@@ -131,20 +130,6 @@ Otherwise, Jocket readers and writers have their own API allowing to perform non
 potentially faster than with input/output streams.
 
 
-Running the benchmark
-----------------------
-
-Server:
-```
-java -cp jocket-0.4.0.jar jocket.bench.BenchServer
-```
-
-Client:
-```
-java -cp jocket-0.4.0.jar jocket.bench.BenchClient
-```
-
-
 Credits
 -------
 
@@ -153,6 +138,10 @@ This project takes some ideas from @mjpt777 and @peter-lawrey
 
 Changes
 -------
+
+### 0.5.0
+
+Contains misc optimizations, especially regarding the futex implementation.
 
 ### 0.4.0
 
