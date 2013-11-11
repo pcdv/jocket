@@ -1,6 +1,8 @@
 package jocket.test;
 
-import static junit.framework.Assert.*;
+import static junit.framework.Assert.assertEquals;
+import static junit.framework.Assert.assertFalse;
+import static junit.framework.Assert.assertTrue;
 
 import java.io.IOException;
 import java.nio.MappedByteBuffer;
@@ -91,6 +93,7 @@ public class TestFutex implements Const {
   private CountDownLatch futureAwait() {
     final CountDownLatch latch = new CountDownLatch(1);
     Thread reader = new Thread() {
+      @SuppressWarnings("deprecation")
       @Override
       public void run() {
         futex.await();

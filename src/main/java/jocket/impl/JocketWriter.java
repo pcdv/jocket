@@ -44,7 +44,7 @@ public final class JocketWriter extends AbstractJocketBuffer {
 
   /**
    * Sets packet alignment.
-   *
+   * 
    * @param align must be either 0 or a power of 2
    */
   public void setAlign(int align) {
@@ -107,8 +107,7 @@ public final class JocketWriter extends AbstractJocketBuffer {
       if (mod != 0) {
         this.pend += align - mod;
         this.pstart = this.pend;
-      }
-      else
+      } else
         this.pstart = pend;
 
       dirty = false;
@@ -119,7 +118,7 @@ public final class JocketWriter extends AbstractJocketBuffer {
 
   /**
    * Returns the absolute position of the last read byte.
-   *
+   * 
    * @param rseq reader sequence number.
    */
   private int head(int rseq) {
@@ -134,7 +133,7 @@ public final class JocketWriter extends AbstractJocketBuffer {
 
   /**
    * Returns the absolute position of specified packet.
-   *
+   * 
    * @param seq a packet number
    */
   private int start(int seq) {
@@ -154,7 +153,7 @@ public final class JocketWriter extends AbstractJocketBuffer {
    * <p>
    * This method works only if pend/pstart are reset to 0 when the reader has
    * read everything (otherwise 0 can be returned instead of capacity).
-   *
+   * 
    * @param rseq sequence number of reader
    * @param head position of last written byte
    */
@@ -169,11 +168,9 @@ public final class JocketWriter extends AbstractJocketBuffer {
   }
 
   /**
-   * Returns the reader sequence number. Call must be preceded by a read memory
-   * barrier.
+   * Returns the reader sequence number.
    */
   private final int rseq() {
-    readMemoryBarrier();
     return buf.getInt(RSEQ);
   }
 
@@ -190,8 +187,8 @@ public final class JocketWriter extends AbstractJocketBuffer {
 
   @Override
   protected void close0() {
+    writeMemoryBarrier(); // not sure if really necessary
     buf.putInt(WSEQ, -1);
-    writeMemoryBarrier();
     if (futex != null)
       futex.signal(-1);
   }
@@ -214,15 +211,9 @@ public final class JocketWriter extends AbstractJocketBuffer {
    * For testing purposes.
    */
   public String debug() {
-    return String
-        .format("wseq=%d rseq=%d pstart=%d plen=%d tail=%d dirty=%b capacity=%d",
-                wseq,
-                rseq(),
-                pstart,
-                pend - pstart,
-                head(rseq()),
-                pend > pstart,
-                capacity);
+    return String.format(
+        "wseq=%d rseq=%d pstart=%d plen=%d tail=%d dirty=%b capacity=%d", wseq,
+        rseq(), pstart, pend - pstart, head(rseq()), pend > pstart, capacity);
   }
 
   public void useFutex() {
