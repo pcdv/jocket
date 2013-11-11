@@ -27,8 +27,8 @@ public final class BenchClient implements Settings {
   private DataOutputStream out;
 
   public BenchClient() throws IOException {
-    this.nanos = new long[REPS];
-    this.buf = new byte[REPLY_SIZE];
+    this.nanos = new long[NOSTATS ? 0 : REPS];
+    this.buf = new byte[Math.max(REPLY_SIZE, 4)];
     if (USE_JOCKET) {
       JocketSocket s = new JocketSocket(PORT);
       in = new DataInputStream(s.getInputStream());
@@ -72,8 +72,8 @@ public final class BenchClient implements Settings {
       iter(BATCH);
       nanos = (System.nanoTime() - nanos) / BATCH;
 
-      if (i < REPS)
-        this.nanos[i] = nanos;
+      if (!NOSTATS)
+        this.nanos[i % reps] = nanos;
 
       if (pauseNanos > 0)
         LockSupport.parkNanos(pauseNanos);
