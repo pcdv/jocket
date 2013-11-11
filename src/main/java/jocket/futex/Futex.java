@@ -64,7 +64,7 @@ public class Futex implements WaitStrategy {
     await0(futAddr);
   }
 
-  private static native long getAddress(MappedByteBuffer b);
+  public static native long getAddress(MappedByteBuffer b);
 
   private static native void signal0(long addr);
 

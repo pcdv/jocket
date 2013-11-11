@@ -1,16 +1,15 @@
 package jocket.impl;
 
-import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Base class for JocketReader and JocketWriter.
- * 
+ *
  * @author pcdv
  */
 public abstract class AbstractJocketBuffer implements Const {
 
-  protected final ByteBuffer buf;
+  protected final ByteBufferAccessor buf;
 
   /**
    * Number of data bytes that can be stored in buffer. Must be a power of 2.
@@ -40,7 +39,7 @@ public abstract class AbstractJocketBuffer implements Const {
 
   private boolean closed;
 
-  public AbstractJocketBuffer(ByteBuffer buf, int npackets) {
+  public AbstractJocketBuffer(ByteBufferAccessor buf, int npackets) {
     if (Integer.bitCount(npackets) != 1)
       throw new IllegalArgumentException("npackets must be a power of 2");
     this.buf = buf;

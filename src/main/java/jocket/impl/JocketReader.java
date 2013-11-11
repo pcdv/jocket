@@ -16,6 +16,10 @@ public class JocketReader extends AbstractJocketBuffer {
   private WaitStrategy waiter = new BusyYieldSleep();
 
   public JocketReader(ByteBuffer buf, int npackets) {
+    super(new DefaultAccessor(buf), npackets);
+  }
+
+  public JocketReader(ByteBufferAccessor buf, int npackets) {
     super(buf, npackets);
   }
 
@@ -33,10 +37,9 @@ public class JocketReader extends AbstractJocketBuffer {
     for (;;) {
       int read = read(data, off, len);
       if (read != 0) {
-        //waiter.reset();
+        // waiter.reset();
         return read;
-      }
-      else {
+      } else {
         waiter.pauseWhile(wseq);
       }
     }
@@ -54,7 +57,7 @@ public class JocketReader extends AbstractJocketBuffer {
       return 0;
     }
 
-    final ByteBuffer buf = this.buf;
+    final ByteBufferAccessor buf = this.buf;
     final int pktInfo = PACKET_INFO + (rseq & packetMask) * LEN_PACKET_INFO;
     final int available = buf.getInt(pktInfo + 4);
 
@@ -87,20 +90,10 @@ public class JocketReader extends AbstractJocketBuffer {
     wseq = buf.getInt(WSEQ);
   }
 
-  private void checkResetFlag() {
-
-    // int old = rseq;
-    if (rseq > resetSeqNum && buf.get(RESET) == 1) {
-      System.out.println("Got seqnum reset at " + rseq);
-      rseq = 0;
-      buf.put(RESET, (byte) 0);
-    }
-  }
-
   public int available() {
     readMemoryBarrier();
 
-    checkResetFlag();
+    // checkResetFlag();
     int wseq = buf.getInt(WSEQ);
     if (wseq <= rseq)
       return 0;
@@ -110,7 +103,7 @@ public class JocketReader extends AbstractJocketBuffer {
 
     int start = buf.getInt(PACKET_INFO + rindex * LEN_PACKET_INFO);
     int end = buf.getInt(PACKET_INFO + windex * LEN_PACKET_INFO)
-              + buf.getInt(PACKET_INFO + windex * LEN_PACKET_INFO + 4);
+        + buf.getInt(PACKET_INFO + windex * LEN_PACKET_INFO + 4);
 
     if (start <= end)
       return end - start;
@@ -119,7 +112,7 @@ public class JocketReader extends AbstractJocketBuffer {
   }
 
   public void useFutex() {
-    this.waiter = new Futex((MappedByteBuffer) buf, FUTEX, WSEQ);
+    this.waiter = new Futex((MappedByteBuffer) buf.getBuffer(), FUTEX, WSEQ);
   }
 
   public WaitStrategy getWaitStrategy() {

@@ -13,6 +13,7 @@ import java.util.Random;
 import jocket.impl.Const;
 import jocket.impl.JocketReader;
 import jocket.impl.JocketWriter;
+import jocket.impl.UnsafeAccessor;
 
 /**
  * Creates or opens an exchange file wrapped in a mapped byte buffer and makes
@@ -81,8 +82,8 @@ public class JocketFile implements Const {
       maxPackets = buf.getInt(META_MAX_PACKETS);
     }
 
-    reader = new JocketReader(buf, maxPackets);
-    writer = new JocketWriter(buf, maxPackets);
+    reader = new JocketReader(new UnsafeAccessor(buf), maxPackets);
+    writer = new JocketWriter(new UnsafeAccessor(buf), maxPackets);
     file.deleteOnExit();
   }
 
