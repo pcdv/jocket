@@ -18,6 +18,7 @@ extern "C" {
       return (jlong) (*env)->GetDirectBufferAddress(env, buf);
     }
 
+  // for test purposes
   JNIEXPORT jint JNICALL Java_jocket_futex_Futex_getInt0
     (JNIEnv *env, jclass cls, jlong addr) 
     {
@@ -25,6 +26,7 @@ extern "C" {
       return *seqPtr;
     }
 
+  // for test purposes
   JNIEXPORT void JNICALL Java_jocket_futex_Futex_setInt0
     (JNIEnv *env, jclass cls, jlong addr, jint val)
     {
@@ -35,16 +37,18 @@ extern "C" {
 
   //const struct timespec SECOND = { 1, 0 };
 
+  /*
+   * Called by the reader.
+   */
   JNIEXPORT void JNICALL Java_jocket_futex_Futex_pause
     (JNIEnv *env, jclass cls, jlong futAddr, jlong seqAddr, jint oldseq)
     {
       unsigned int i = 0;
       jint* seqPtr = (jint *)seqAddr;
+      int* futex = (int*)futAddr;
 
       do {
         if (i++ > 1024) {
-          int* futex = (int*)futAddr;
-
           if (__sync_val_compare_and_swap(futex, 0, -1) == 0) {
             syscall(SYS_futex, futex, FUTEX_WAIT, -1, NULL, NULL, 0);
           }
@@ -56,10 +60,12 @@ extern "C" {
         } else {
           asm("pause");
         }
-        __sync_synchronize();
       } while (*seqPtr == oldseq);
     }
 
+  /*
+   * Called by the writer.
+   */
   JNIEXPORT void JNICALL Java_jocket_futex_Futex_signal0
     (JNIEnv *env, jclass cls, jlong addr)
     {
@@ -71,7 +77,10 @@ extern "C" {
       }
     }
 
-
+  /*
+   * DEPRECATED. pause() is now called to minimize the number of
+   * JNI roundtrips.
+   */
   JNIEXPORT inline void JNICALL Java_jocket_futex_Futex_await0
     (JNIEnv *env, jclass cls, jlong addr)
     {
@@ -89,13 +98,8 @@ extern "C" {
       }
     }
 
-  JNIEXPORT void JNICALL Java_jocket_futex_Futex_x86pause
-    (JNIEnv *env, jclass cls)
-    {
-      asm("pause");
-    }
-
-
+  
+  // FOR TEST PURPOSES
 
 #if defined(__i386__)
   static __inline__ unsigned long long rdtsc(void) {

@@ -25,8 +25,8 @@ public class JocketReader extends AbstractJocketBuffer {
 
   @Override
   protected void close0() {
+    writeMemoryBarrier(); // not sure if really necessary
     buf.putInt(RSEQ, -1);
-    writeMemoryBarrier();
   }
 
   public int read(byte[] data) {
@@ -76,24 +76,21 @@ public class JocketReader extends AbstractJocketBuffer {
       buf.position(pos);
       buf.get(data, off, len);
 
-      // update packet info to make space available for writer
+      // update packet info to make space available for writer (the order of
+      // the 2 writes should not be important as the writer does not look that
+      // packet length)
       buf.putInt(pktInfo, buf.getInt(pktInfo) + len);
       buf.putInt(pktInfo + 4, available - len);
     }
 
-    writeMemoryBarrier();
     return len;
   }
 
   private void readWseq() {
-    readMemoryBarrier();
     wseq = buf.getInt(WSEQ);
   }
 
   public int available() {
-    readMemoryBarrier();
-
-    // checkResetFlag();
     int wseq = buf.getInt(WSEQ);
     if (wseq <= rseq)
       return 0;
