@@ -23,8 +23,9 @@ public class TestServer {
       @Override
       public void run() {
         try {
-          new ReadLoop(s.getInputStream(), System.out);
-        } catch (IOException e) {
+          Pipe.pipe(s.getInputStream(), System.out);
+        }
+        catch (IOException e) {
           s.close();
         }
       }
@@ -34,8 +35,9 @@ public class TestServer {
       @Override
       public void run() {
         try {
-          new WriteLoop(s.getOutputStream(), System.in);
-        } catch (IOException e) {
+          Pipe.pipe(System.in, s.getOutputStream());
+        }
+        catch (IOException e) {
           s.close();
         }
       }

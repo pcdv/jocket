@@ -4,16 +4,17 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-public class ReadLoop {
+public class Pipe {
 
-  public ReadLoop(InputStream reader, OutputStream sink) throws IOException {
+  public static void pipe(InputStream in, OutputStream out) throws IOException {
     byte[] buf = new byte[1024];
     while (true) {
-      int len = reader.read(buf);
+      int len = in.read(buf);
       if (len >= 0) {
-        sink.write(buf, 0, len);
-        sink.flush();
-      } else {
+        out.write(buf, 0, len);
+        out.flush();
+      }
+      else {
         System.out.println("Closed");
         break;
       }
