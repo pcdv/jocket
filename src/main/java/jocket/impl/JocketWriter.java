@@ -34,8 +34,12 @@ public final class JocketWriter extends AbstractJocketBuffer {
 
   private Futex futex;
 
-  public JocketWriter(ByteBuffer buf, int npackets) {
+  public JocketWriter(ByteBufferAccessor buf, int npackets) {
     super(buf, npackets);
+  }
+
+  public JocketWriter(ByteBuffer buf, int npackets) {
+    super(new DefaultAccessor(buf), npackets);
   }
 
   /**
@@ -92,7 +96,7 @@ public final class JocketWriter extends AbstractJocketBuffer {
   public void flush() {
     final int pend = this.pend;
     final int pstart = this.pstart;
-    final ByteBuffer buf = this.buf;
+    final ByteBufferAccessor buf = this.buf;
     if (dirty) {
       int pkt = PACKET_INFO + (wseq & packetMask) * LEN_PACKET_INFO;
       buf.putInt(pkt, pstart);
@@ -222,6 +226,6 @@ public final class JocketWriter extends AbstractJocketBuffer {
   }
 
   public void useFutex() {
-    this.futex = new Futex((MappedByteBuffer) buf, FUTEX, -1);
+    this.futex = new Futex((MappedByteBuffer) buf.getBuffer(), FUTEX, -1);
   }
 }
