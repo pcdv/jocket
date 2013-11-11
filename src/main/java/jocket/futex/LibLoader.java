@@ -28,7 +28,7 @@ public class LibLoader {
    * @throws IOException
    */
   public static void loadLibrary(String lib) throws IOException {
-    File f = File.createTempFile("jni", ".so");
+    File f = File.createTempFile("jni" + lib, ".so");
     try {
       String path = "lib" + lib + BITS + ".so";
       InputStream in = Futex.class.getClassLoader().getResourceAsStream(path);
