@@ -45,4 +45,8 @@ public class DefaultAccessor implements ByteBufferAccessor {
   public ByteBuffer getBuffer() {
     return buf;
   }
+
+  public void limit(int limit) {
+    buf.limit(limit);
+  }
 }
