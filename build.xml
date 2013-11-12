@@ -27,11 +27,11 @@
 	</target>
 
 	<target name="javac-main" depends="mkdir">
-		<javac destdir="classes" includeantruntime="false" srcdir="src/main/java" debug="on"/>
+		<javac destdir="classes" includeantruntime="false" srcdir="src/main/java" debug="on" target="1.6" source="1.6"/>
 	</target>
 
 	<target name="javac-bench" depends="javac-main">
-		<javac destdir="classes" includeantruntime="false" srcdir="src/test/java" excludes="**/test/*" />
+		<javac destdir="classes" includeantruntime="false" srcdir="src/test/java" excludes="**/test/*"  target="1.6" source="1.6"/>
 	</target>
 
 	<target name="test" depends="javac-test">
@@ -53,7 +53,7 @@
 
 	<target name="javac-test" depends="javac-main">
 		<echo>NB: To build JUnits, junit jar must be copied in lib/ directory </echo>
-		<javac destdir="classes" includeantruntime="false" srcdir="src/test/java" includes="**/test/*" classpathref="libs" />
+		<javac destdir="classes" includeantruntime="false" srcdir="src/test/java" includes="**/test/*" classpathref="libs"  target="1.6" source="1.6"/>
 	</target>
 
 	<target name="clean">
