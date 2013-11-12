@@ -1,12 +1,11 @@
 package jocket.test;
 
-import static junit.framework.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 import java.io.DataInputStream;
 import java.io.OutputStream;
 
 import jocket.impl.ClosedException;
-import junit.framework.Assert;
 
 import org.junit.Test;
 
@@ -34,7 +33,7 @@ public class TestJocketSocket extends AbstractJocketSocketTest {
     c.getInputStream().close();
     try {
       s.getOutputStream().write(22);
-      Assert.fail("");
+      fail("");
     } catch (ClosedException e) {
     }
   }
