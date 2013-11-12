@@ -1,6 +1,6 @@
 package jocket.test;
 
-import static junit.framework.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 import java.io.EOFException;
 import java.nio.ByteBuffer;
