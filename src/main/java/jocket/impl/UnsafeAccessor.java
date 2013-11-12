@@ -65,4 +65,7 @@ public final class UnsafeAccessor implements ByteBufferAccessor {
     return buf.capacity();
   }
 
+  public void limit(int limit) {
+    buf.limit(limit);
+  }
 }

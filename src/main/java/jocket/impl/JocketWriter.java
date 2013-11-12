@@ -34,6 +34,8 @@ public final class JocketWriter extends AbstractJocketBuffer {
 
   private Futex futex;
 
+  private ByteBuffer currentPacket;
+
   public JocketWriter(ByteBufferAccessor buf, int npackets) {
     super(buf, npackets);
   }
@@ -65,19 +67,19 @@ public final class JocketWriter extends AbstractJocketBuffer {
       }
     }
 
+    else if (rseq < 0)
+      close();
+
     // cannot write if all packets are written and the reader didn't read them
     else if (wseq - rseq >= npackets)
       return 0;
-
-    else if (rseq < 0)
-      close();
 
     if (isClosed())
       throw new ClosedException("Closed");
 
     // TODO: implement anti-truncation mechanism (write at 0 if remaining
     // space is too small)
-    final int bytes = Math.min(getAvailableSpace(rseq, pend), len);
+    final int bytes = Math.min(getAvailableSpace(rseq), len);
     if (bytes > 0) {
       dirty = true;
       buf.position(dataOffset + (pend & dataMask));
@@ -93,9 +95,74 @@ public final class JocketWriter extends AbstractJocketBuffer {
     return bytes;
   }
 
+  /**
+   * EXPERIMENTAL. Returns a view on a segment of shared data so that the user
+   * can directly write into it. This allows to avoid the array copy that would
+   * take place if {@link #write(byte[], int, int)} was called.
+   * 
+   * @param size
+   * @return
+   */
+  public ByteBuffer newPacket(int size) {
+    final int rseq = rseq();
+    final int wseq = this.wseq;
+
+    if (rseq == wseq) {
+      // reset position in buffer when reader is up to date
+      if (rseq > 0 && !dirty) {
+        this.pstart = this.pend = 0;
+      }
+    } else if (rseq < 0)
+      close();
+
+    // cannot write if all packets are written and the reader didn't read them
+    else if (wseq - rseq >= npackets)
+      return null;
+
+    if (isClosed())
+      throw new ClosedException("Closed");
+
+    int av = getAvailableSpace(rseq);
+    if (av < size)
+      return null;
+
+    int pkt = PACKET_INFO + (wseq & packetMask) * LEN_PACKET_INFO;
+
+    int mod = pend & alignMask;
+    if (mod != 0) {
+      this.pend += align - mod;
+    }
+    this.pstart = pend;
+
+    buf.putInt(pkt, pend);
+    ByteBuffer b = buf.getBuffer();
+    b.position(dataOffset + pstart);
+    b.limit(dataOffset + pstart + av);
+    return currentPacket = b.slice();
+  }
+
+  /**
+   * EXPERIMENTAL. Sends the packet that was previously returned by
+   * {@link #newPacket(int)}.
+   * 
+   * @param b
+   */
+  public void send(ByteBuffer b) {
+    if (b == null || b != currentPacket)
+      throw new IllegalArgumentException("Invalid packet");
+
+    currentPacket = null;
+
+    int pkt = PACKET_INFO + (wseq & packetMask) * LEN_PACKET_INFO;
+    int size = b.position();
+    buf.putInt(pkt + 4, size);
+    pend += size;
+    pstart = pend;
+    writeMemoryBarrier();
+    buf.putInt(WSEQ, ++wseq);
+  }
+
   public void flush() {
-    final int pend = this.pend;
-    final int pstart = this.pstart;
     final ByteBufferAccessor buf = this.buf;
     if (dirty) {
       int pkt = PACKET_INFO + (wseq & packetMask) * LEN_PACKET_INFO;
@@ -106,9 +173,8 @@ public final class JocketWriter extends AbstractJocketBuffer {
       int mod = pend & alignMask;
       if (mod != 0) {
         this.pend += align - mod;
-        this.pstart = this.pend;
-      } else
-        this.pstart = pend;
+      }
+      this.pstart = pend;
 
       dirty = false;
       if (futex != null)
@@ -157,14 +223,14 @@ public final class JocketWriter extends AbstractJocketBuffer {
    * @param rseq sequence number of reader
    * @param head position of last written byte
    */
-  private int getAvailableSpace(int rseq, int head) {
-    return Math.min(start(rseq), head - (head & dataMask)) + capacity - head;
+  private int getAvailableSpace(int rseq) {
+    return Math.min(start(rseq), pend - (pend & dataMask)) + capacity - pend;
 
     // NB: this is the contracted form of:
     // -----------------------------------
-    // int lim1 = head + capacity - (head & dataMask);
+    // int lim1 = pend + capacity - (pend & dataMask);
     // int lim2 = start(rseq) + capacity;
-    // return Math.min(lim1, lim2) - head;
+    // return Math.min(lim1, lim2) - pend;
   }
 
   /**
@@ -182,7 +248,7 @@ public final class JocketWriter extends AbstractJocketBuffer {
     int rseq = rseq();
     if (wseq - rseq >= npackets)
       return 0;
-    return getAvailableSpace(rseq, pend);
+    return getAvailableSpace(rseq);
   }
 
   @Override

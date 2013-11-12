@@ -20,6 +20,8 @@ public interface ByteBufferAccessor {
 
   void get(byte[] data, int off, int available);
 
+  void limit(int limit);
+
   ByteBuffer getBuffer();
 
 }

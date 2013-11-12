@@ -15,6 +15,8 @@ public class JocketReader extends AbstractJocketBuffer {
 
   private WaitStrategy waiter = new BusyYieldSleep();
 
+  private ByteBuffer currentPacket;
+
   public JocketReader(ByteBuffer buf, int npackets) {
     super(new DefaultAccessor(buf), npackets);
   }
@@ -37,53 +39,94 @@ public class JocketReader extends AbstractJocketBuffer {
     for (;;) {
       int read = read(data, off, len);
       if (read != 0) {
-        // waiter.reset();
         return read;
-      } else {
+      }
+      else {
         waiter.pauseWhile(wseq);
       }
     }
   }
 
   public int read(byte[] data, int off, int len) {
-    readWseq();
-
     if (wseq <= rseq) {
-      if (wseq < 0)
-        close();
+      readWseq();
 
-      if (isClosed())
-        return -1;
-      return 0;
+      if (wseq <= rseq) {
+        if (wseq < 0)
+          close();
+
+        if (isClosed())
+          return -1;
+        return 0;
+      }
     }
 
-    final ByteBufferAccessor buf = this.buf;
     final int pktInfo = PACKET_INFO + (rseq & packetMask) * LEN_PACKET_INFO;
     final int available = buf.getInt(pktInfo + 4);
 
-    int pos = dataOffset + (buf.getInt(pktInfo) & dataMask);
+    buf.position(dataOffset + (buf.getInt(pktInfo) & dataMask));
+
     // if the whole packet can be read
     if (available <= len) {
-      len = available;
-      buf.position(pos);
       buf.get(data, off, available);
       buf.putInt(RSEQ, ++rseq);
+      len = available;
     }
 
     // if the packet can be read only partially
     else {
       // read data
-      buf.position(pos);
       buf.get(data, off, len);
 
       // update packet info to make space available for writer (the order of
-      // the 2 writes should not be important as the writer does not look that
+      // the 2 writes should not be important as the writer does not look at
       // packet length)
-      buf.putInt(pktInfo, buf.getInt(pktInfo) + len);
       buf.putInt(pktInfo + 4, available - len);
+      buf.putInt(pktInfo, buf.getInt(pktInfo) + len);
     }
 
     return len;
+  }
+
+  /**
+   * EXPERIMENTAL.
+   */
+  public ByteBuffer nextPacket() {
+    if (wseq <= rseq) {
+      readWseq();
+
+      if (wseq <= rseq) {
+        if (wseq < 0)
+          throw new ClosedException("Socket closed");
+        return null;
+      }
+    }
+
+    final int pktInfo = PACKET_INFO + (rseq & packetMask) * LEN_PACKET_INFO;
+    final int available = buf.getInt(pktInfo + 4);
+    int pos = dataOffset + (buf.getInt(pktInfo) & dataMask);
+
+    ByteBuffer buf = this.buf.getBuffer();
+    buf.position(pos);
+    buf.limit(pos + available);
+
+    return currentPacket = buf.slice();
+  }
+
+  public void release(ByteBuffer packet) {
+    if (currentPacket == null || currentPacket != packet)
+      throw new IllegalArgumentException("Invalid packet");
+
+    currentPacket = null;
+
+    if (packet.remaining() == 0) {
+      buf.putInt(RSEQ, ++rseq);
+    }
+    else {
+      final int pktInfo = PACKET_INFO + (rseq & packetMask) * LEN_PACKET_INFO;
+      buf.putInt(pktInfo + 4, packet.remaining());
+      buf.putInt(pktInfo, packet.position());
+    }
   }
 
   private void readWseq() {
