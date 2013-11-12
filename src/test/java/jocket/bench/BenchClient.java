@@ -72,7 +72,7 @@ public final class BenchClient implements Settings {
       iter(BATCH);
       nanos = (System.nanoTime() - nanos) / BATCH;
 
-      if (!NOSTATS)
+      if (!NOSTATS && i < this.nanos.length)
         this.nanos[i % reps] = nanos;
 
       if (pauseNanos > 0)
