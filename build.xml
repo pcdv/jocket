@@ -31,7 +31,7 @@
 	</target>
 
 	<target name="javac-bench" depends="javac-main">
-		<javac destdir="classes" includeantruntime="false" srcdir="src/test/java" excludes="**/test/*"  target="1.6" source="1.6"/>
+		<javac destdir="classes" includeantruntime="false" srcdir="src/test/java" debug="on" excludes="**/test/*"  target="1.6" source="1.6"/>
 	</target>
 
 	<target name="test" depends="javac-test">
