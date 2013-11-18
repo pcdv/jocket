@@ -31,41 +31,8 @@ public final class UnsafeAccessor implements ByteBufferAccessor {
   }
 
   @Override
-  public byte get(int pos) {
-    return unsafe.getByte(addr + pos);
-  }
-
-  @Override
-  public void put(int pos, byte val) {
-    unsafe.putByte(addr + pos, val);
-  }
-
-  @Override
-  public void position(int pos) {
-    buf.position(pos);
-  }
-
-  @Override
-  public void put(byte[] data, int off, int bytes) {
-    buf.put(data, off, bytes);
-  }
-
-  @Override
-  public void get(byte[] data, int off, int available) {
-    buf.get(data, off, available);
-  }
-
-  @Override
   public ByteBuffer getBuffer() {
     return buf;
   }
 
-  @Override
-  public int capacity() {
-    return buf.capacity();
-  }
-
-  public void limit(int limit) {
-    buf.limit(limit);
-  }
 }

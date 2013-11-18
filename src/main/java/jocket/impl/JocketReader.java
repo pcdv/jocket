@@ -18,17 +18,13 @@ public class JocketReader extends AbstractJocketBuffer {
   private ByteBuffer currentPacket;
 
   public JocketReader(ByteBuffer buf, int npackets) {
-    super(new DefaultAccessor(buf), npackets);
-  }
-
-  public JocketReader(ByteBufferAccessor buf, int npackets) {
     super(buf, npackets);
   }
 
   @Override
   protected void close0() {
     writeMemoryBarrier(); // not sure if really necessary
-    buf.putInt(RSEQ, -1);
+    acc.putInt(RSEQ, -1);
   }
 
   public int read(byte[] data) {
@@ -62,14 +58,14 @@ public class JocketReader extends AbstractJocketBuffer {
     }
 
     final int pktInfo = PACKET_INFO + (rseq & packetMask) * LEN_PACKET_INFO;
-    final int available = buf.getInt(pktInfo + 4);
+    final int available = acc.getInt(pktInfo + 4);
 
-    buf.position(dataOffset + (buf.getInt(pktInfo) & dataMask));
+    buf.position(dataOffset + (acc.getInt(pktInfo) & dataMask));
 
     // if the whole packet can be read
     if (available <= len) {
       buf.get(data, off, available);
-      buf.putInt(RSEQ, ++rseq);
+      acc.putInt(RSEQ, ++rseq);
       len = available;
     }
 
@@ -81,15 +77,19 @@ public class JocketReader extends AbstractJocketBuffer {
       // update packet info to make space available for writer (the order of
       // the 2 writes should not be important as the writer does not look at
       // packet length)
-      buf.putInt(pktInfo + 4, available - len);
-      buf.putInt(pktInfo, buf.getInt(pktInfo) + len);
+      acc.putInt(pktInfo + 4, available - len);
+      acc.putInt(pktInfo, acc.getInt(pktInfo) + len);
     }
 
     return len;
   }
 
   /**
-   * EXPERIMENTAL.
+   * EXPERIMENTAL (part of the zero-copy API). If a packet is available, return
+   * a ByteBuffer wrapping the packet. The ByteBuffer should not be modified as
+   * it points directly into the exchange file (when using a MappedByteBuffer).
+   * After use, {@link #release(ByteBuffer)} MUST be called in order to notify
+   * the writer that the read area has become available for writing.
    */
   public ByteBuffer nextPacket() {
     if (wseq <= rseq) {
@@ -103,16 +103,25 @@ public class JocketReader extends AbstractJocketBuffer {
     }
 
     final int pktInfo = PACKET_INFO + (rseq & packetMask) * LEN_PACKET_INFO;
-    final int available = buf.getInt(pktInfo + 4);
-    int pos = dataOffset + (buf.getInt(pktInfo) & dataMask);
+    final int packetSize = acc.getInt(pktInfo + 4);
+    final int packetPos = dataOffset + (acc.getInt(pktInfo) & dataMask);
 
-    ByteBuffer buf = this.buf.getBuffer();
-    buf.position(pos);
-    buf.limit(pos + available);
+    buf.position(packetPos);
+    buf.limit(packetPos + packetSize);
 
+    // NB: I'm not sure calling slice is cheaper than the array-copy it avoids
+    // (except for big packets). An alternative would be to directly return
+    // the main buffer (more dangerous because it allows to bork the entire
+    // exchange file). Surely a reusable/mutable slice would be better.
     return currentPacket = buf.slice();
   }
 
+  /**
+   * EXPERIMENTAL (part of the zero-copy API). Releases the packet returned by
+   * {@link #nextPacket()} after reading.
+   *
+   * @param packet
+   */
   public void release(ByteBuffer packet) {
     if (currentPacket == null || currentPacket != packet)
       throw new IllegalArgumentException("Invalid packet");
@@ -120,30 +129,30 @@ public class JocketReader extends AbstractJocketBuffer {
     currentPacket = null;
 
     if (packet.remaining() == 0) {
-      buf.putInt(RSEQ, ++rseq);
+      acc.putInt(RSEQ, ++rseq);
     }
     else {
       final int pktInfo = PACKET_INFO + (rseq & packetMask) * LEN_PACKET_INFO;
-      buf.putInt(pktInfo + 4, packet.remaining());
-      buf.putInt(pktInfo, packet.position());
+      acc.putInt(pktInfo + 4, packet.remaining());
+      acc.putInt(pktInfo, packet.position());
     }
   }
 
   private void readWseq() {
-    wseq = buf.getInt(WSEQ);
+    wseq = acc.getInt(WSEQ);
   }
 
   public int available() {
-    int wseq = buf.getInt(WSEQ);
+    int wseq = acc.getInt(WSEQ);
     if (wseq <= rseq)
       return 0;
 
     int windex = (wseq - 1) & packetMask; // last packet written
     int rindex = rseq & packetMask; // first packet written
 
-    int start = buf.getInt(PACKET_INFO + rindex * LEN_PACKET_INFO);
-    int end = buf.getInt(PACKET_INFO + windex * LEN_PACKET_INFO)
-        + buf.getInt(PACKET_INFO + windex * LEN_PACKET_INFO + 4);
+    int start = acc.getInt(PACKET_INFO + rindex * LEN_PACKET_INFO);
+    int end = acc.getInt(PACKET_INFO + windex * LEN_PACKET_INFO)
+              + acc.getInt(PACKET_INFO + windex * LEN_PACKET_INFO + 4);
 
     if (start <= end)
       return end - start;
@@ -152,7 +161,7 @@ public class JocketReader extends AbstractJocketBuffer {
   }
 
   public void useFutex() {
-    this.waiter = new Futex((MappedByteBuffer) buf.getBuffer(), FUTEX, WSEQ);
+    this.waiter = new Futex((MappedByteBuffer) buf, FUTEX, WSEQ);
   }
 
   public WaitStrategy getWaitStrategy() {
