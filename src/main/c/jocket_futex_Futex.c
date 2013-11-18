@@ -62,7 +62,7 @@ extern "C" {
 #if defined(__i386__)
           __builtin_ia32_pause();
 #elif defined(__x86_64__)
-          __builtin_ia32_pause();
+          asm("pause");
 #else
           sched_yield();
 #endif
