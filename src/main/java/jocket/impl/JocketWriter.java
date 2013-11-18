@@ -5,7 +5,7 @@ import java.nio.MappedByteBuffer;
 
 import jocket.futex.Futex;
 
-public final class JocketWriter extends AbstractJocketBuffer {
+public class JocketWriter extends AbstractJocketBuffer {
 
   /** The sequence number of the next packet to write. */
   private int wseq;
@@ -36,17 +36,13 @@ public final class JocketWriter extends AbstractJocketBuffer {
 
   private ByteBuffer currentPacket;
 
-  public JocketWriter(ByteBufferAccessor buf, int npackets) {
-    super(buf, npackets);
-  }
-
   public JocketWriter(ByteBuffer buf, int npackets) {
-    super(new DefaultAccessor(buf), npackets);
+    super(buf, npackets);
   }
 
   /**
    * Sets packet alignment.
-   * 
+   *
    * @param align must be either 0 or a power of 2
    */
   public void setAlign(int align) {
@@ -56,9 +52,18 @@ public final class JocketWriter extends AbstractJocketBuffer {
     this.alignMask = align == 0 ? 0 : align - 1;
   }
 
-  public int write(final byte[] data, final int off, final int len) {
+  /**
+   * Writes data into the exchange file and return the number of bytes written.
+   * The call is non-blocking and returns 0 if data cannot be written.
+   *
+   * @param data a byte array
+   * @param off the position in array of data that must be sent
+   * @param len the number of bytes to write
+   * @return the number of bytes written
+   * @throws ClosedException if the socket is closed
+   */
+  public int write(final byte[] data, final int off, int len) {
     final int rseq = rseq();
-    final int wseq = this.wseq;
 
     if (rseq == wseq) {
       // reset position in buffer when reader is up to date
@@ -74,17 +79,17 @@ public final class JocketWriter extends AbstractJocketBuffer {
     else if (wseq - rseq >= npackets)
       return 0;
 
-    if (isClosed())
+    if (closed)
       throw new ClosedException("Closed");
 
     // TODO: implement anti-truncation mechanism (write at 0 if remaining
     // space is too small)
-    final int bytes = Math.min(getAvailableSpace(rseq), len);
-    if (bytes > 0) {
+    len = Math.min(getAvailableSpace(rseq), len);
+    if (len > 0) {
       dirty = true;
       buf.position(dataOffset + (pend & dataMask));
-      buf.put(data, off, bytes);
-      this.pend += bytes;
+      buf.put(data, off, len);
+      this.pend += len;
 
       // flush when reaching end of buffer, otherwise next write will
       // generate an inconsistent packet (overflowing the buffer)
@@ -92,14 +97,25 @@ public final class JocketWriter extends AbstractJocketBuffer {
         flush();
       }
     }
-    return bytes;
+    return len;
   }
 
   /**
    * EXPERIMENTAL. Returns a view on a segment of shared data so that the user
    * can directly write into it. This allows to avoid the array copy that would
    * take place if {@link #write(byte[], int, int)} was called.
-   * 
+   * <p>
+   * Example usage:
+   *
+   * <pre>
+   * // get byte buffer
+   * ByteBuffer b = writer.newPacket(16);
+   * // serialize data in it
+   * b.put(data.getBytes());
+   * // flush packet
+   * w.send(b);
+   * </pre>
+   *
    * @param size
    * @return
    */
@@ -112,7 +128,8 @@ public final class JocketWriter extends AbstractJocketBuffer {
       if (rseq > 0 && !dirty) {
         this.pstart = this.pend = 0;
       }
-    } else if (rseq < 0)
+    }
+    else if (rseq < 0)
       close();
 
     // cannot write if all packets are written and the reader didn't read them
@@ -134,46 +151,42 @@ public final class JocketWriter extends AbstractJocketBuffer {
     }
     this.pstart = pend;
 
-    buf.putInt(pkt, pend);
-    ByteBuffer b = buf.getBuffer();
-    b.position(dataOffset + pstart);
-    b.limit(dataOffset + pstart + av);
-    return currentPacket = b.slice();
+    acc.putInt(pkt, pend);
+    buf.position(dataOffset + pstart);
+    buf.limit(dataOffset + pstart + av);
+    return currentPacket = buf.slice();
   }
 
   /**
    * EXPERIMENTAL. Sends the packet that was previously returned by
    * {@link #newPacket(int)}.
-   * 
-   * @param b
+   *
+   * @param packet
    */
-  public void send(ByteBuffer b) {
-    if (b == null || b != currentPacket)
+  public void send(ByteBuffer packet) {
+    if (packet == null || packet != currentPacket)
       throw new IllegalArgumentException("Invalid packet");
 
     currentPacket = null;
 
     int pkt = PACKET_INFO + (wseq & packetMask) * LEN_PACKET_INFO;
-    int size = b.position();
-    buf.putInt(pkt + 4, size);
+    int size = packet.position();
+    acc.putInt(pkt + 4, size);
     pend += size;
     pstart = pend;
     writeMemoryBarrier();
-    buf.putInt(WSEQ, ++wseq);
+    acc.putInt(WSEQ, ++wseq);
   }
 
   public void flush() {
-    final ByteBufferAccessor buf = this.buf;
+    final int pkt = PACKET_INFO + (wseq & packetMask) * LEN_PACKET_INFO;
     if (dirty) {
-      int pkt = PACKET_INFO + (wseq & packetMask) * LEN_PACKET_INFO;
-      buf.putInt(pkt, pstart);
-      buf.putInt(pkt + 4, pend - pstart);
-      buf.putInt(WSEQ, ++wseq);
+      acc.putInt(pkt, pstart);
+      acc.putInt(pkt + 4, pend - pstart);
+      acc.putInt(WSEQ, ++wseq);
 
-      int mod = pend & alignMask;
-      if (mod != 0) {
-        this.pend += align - mod;
-      }
+      if (alignMask != 0)
+        this.pend += align - (pend & alignMask);
       this.pstart = pend;
 
       dirty = false;
@@ -184,7 +197,7 @@ public final class JocketWriter extends AbstractJocketBuffer {
 
   /**
    * Returns the absolute position of the last read byte.
-   * 
+   *
    * @param rseq reader sequence number.
    */
   private int head(int rseq) {
@@ -194,16 +207,16 @@ public final class JocketWriter extends AbstractJocketBuffer {
 
     final int pkt = PACKET_INFO + ((wseq - 1) & packetMask) * LEN_PACKET_INFO;
 
-    return buf.getInt(pkt) + buf.getInt(pkt + 4);
+    return acc.getInt(pkt) + acc.getInt(pkt + 4);
   }
 
   /**
    * Returns the absolute position of specified packet.
-   * 
+   *
    * @param seq a packet number
    */
   private int start(int seq) {
-    return buf.getInt(PACKET_INFO + (seq & packetMask) * LEN_PACKET_INFO);
+    return acc.getInt(PACKET_INFO + (seq & packetMask) * LEN_PACKET_INFO);
   }
 
   /**
@@ -219,7 +232,7 @@ public final class JocketWriter extends AbstractJocketBuffer {
    * <p>
    * This method works only if pend/pstart are reset to 0 when the reader has
    * read everything (otherwise 0 can be returned instead of capacity).
-   * 
+   *
    * @param rseq sequence number of reader
    * @param head position of last written byte
    */
@@ -237,7 +250,7 @@ public final class JocketWriter extends AbstractJocketBuffer {
    * Returns the reader sequence number.
    */
   private final int rseq() {
-    return buf.getInt(RSEQ);
+    return acc.getInt(RSEQ);
   }
 
   /**
@@ -254,7 +267,7 @@ public final class JocketWriter extends AbstractJocketBuffer {
   @Override
   protected void close0() {
     writeMemoryBarrier(); // not sure if really necessary
-    buf.putInt(WSEQ, -1);
+    acc.putInt(WSEQ, -1);
     if (futex != null)
       futex.signal(-1);
   }
@@ -277,12 +290,18 @@ public final class JocketWriter extends AbstractJocketBuffer {
    * For testing purposes.
    */
   public String debug() {
-    return String.format(
-        "wseq=%d rseq=%d pstart=%d plen=%d tail=%d dirty=%b capacity=%d", wseq,
-        rseq(), pstart, pend - pstart, head(rseq()), pend > pstart, capacity);
+    return String
+        .format("wseq=%d rseq=%d pstart=%d plen=%d tail=%d dirty=%b capacity=%d",
+                wseq,
+                rseq(),
+                pstart,
+                pend - pstart,
+                head(rseq()),
+                pend > pstart,
+                capacity);
   }
 
   public void useFutex() {
-    this.futex = new Futex((MappedByteBuffer) buf.getBuffer(), FUTEX, -1);
+    this.futex = new Futex((MappedByteBuffer) buf, FUTEX, -1);
   }
 }

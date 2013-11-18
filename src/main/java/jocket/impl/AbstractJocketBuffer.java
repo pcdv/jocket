@@ -1,6 +1,10 @@
 package jocket.impl;
 
+import java.nio.ByteBuffer;
+import java.nio.MappedByteBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import jocket.futex.Futex;
 
 /**
  * Base class for JocketReader and JocketWriter.
@@ -9,7 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public abstract class AbstractJocketBuffer implements Const {
 
-  protected final ByteBufferAccessor buf;
+  protected final ByteBuffer buf;
 
   /**
    * Number of data bytes that can be stored in buffer. Must be a power of 2.
@@ -37,18 +41,30 @@ public abstract class AbstractJocketBuffer implements Const {
 
   protected int resetSeqNum = Integer.MAX_VALUE >> 1;
 
-  private boolean closed;
+  protected boolean closed;
 
-  public AbstractJocketBuffer(ByteBufferAccessor buf, int npackets) {
+  /**
+   * This indirection allows to shave off a few nanos by using Unsafe when
+   * possible.
+   */
+  protected final ByteBufferAccessor acc;
+
+  public AbstractJocketBuffer(ByteBuffer buf, int npackets) {
     if (Integer.bitCount(npackets) != 1)
       throw new IllegalArgumentException("npackets must be a power of 2");
+
+    if (buf instanceof MappedByteBuffer && Futex.isAvailable())
+      acc = new UnsafeAccessor((MappedByteBuffer) buf);
+    else
+      acc = new DefaultAccessor(buf);
+
     this.buf = buf;
     this.npackets = npackets;
     this.packetMask = npackets - 1;
     this.capacity = buf.capacity() - (PACKET_INFO + npackets * LEN_PACKET_INFO);
     if (Integer.bitCount(capacity) != 1)
       throw new IllegalArgumentException(
-          "Buffer capacity for data must be a power of 2");
+                                         "Buffer capacity for data must be a power of 2");
     this.dataMask = capacity - 1;
     this.dataOffset = Const.PACKET_INFO + npackets * LEN_PACKET_INFO;
   }

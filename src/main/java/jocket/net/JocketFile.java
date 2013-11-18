@@ -10,16 +10,14 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileChannel.MapMode;
 import java.util.Random;
 
-import jocket.futex.Futex;
 import jocket.impl.Const;
 import jocket.impl.JocketReader;
 import jocket.impl.JocketWriter;
-import jocket.impl.UnsafeAccessor;
 
 /**
  * Creates or opens an exchange file wrapped in a mapped byte buffer and makes
  * it easy to obtain a JocketReader or JocketWriter instance.
- * 
+ *
  * @author pcdv
  */
 public class JocketFile implements Const {
@@ -48,8 +46,7 @@ public class JocketFile implements Const {
     this(file, false, -1, -1);
   }
 
-  private JocketFile(File file, boolean create, int maxPackets, int capacity)
-      throws IOException {
+  private JocketFile(File file, boolean create, int maxPackets, int capacity) throws IOException {
     if (!create && !file.exists())
       throw new FileNotFoundException("File does not exist");
 
@@ -84,14 +81,8 @@ public class JocketFile implements Const {
       maxPackets = buf.getInt(META_MAX_PACKETS);
     }
 
-    if (Futex.isAvailable()) {
-      reader = new JocketReader(new UnsafeAccessor(buf), maxPackets);
-      writer = new JocketWriter(new UnsafeAccessor(buf), maxPackets);
-    }
-    else {
-      reader = new JocketReader(buf, maxPackets);
-      writer = new JocketWriter(buf, maxPackets);
-    }
+    reader = new JocketReader(buf, maxPackets);
+    writer = new JocketWriter(buf, maxPackets);
 
     file.deleteOnExit();
   }
@@ -109,8 +100,8 @@ public class JocketFile implements Const {
   }
 
   /**
-   * Deletes the file to make it harder to sniff stream. Can be called (at least
-   * under linux) after both endpoints have opened the file.
+   * Deletes the file to make it harder to sniff stream. Can be called (at
+   * least under linux) after both endpoints have opened the file.
    */
   public void deleteFile() {
     file.delete();
