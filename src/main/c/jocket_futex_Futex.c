@@ -4,6 +4,7 @@
 #include <sys/syscall.h>   /* For SYS_xxx definitions */
 #include <sys/time.h>
 #include <jni.h>
+#include <sched.h>
 #include "jocket_futex_Futex.h"
 
 #ifdef __cplusplus
@@ -58,7 +59,13 @@ extern "C" {
           }
 
         } else {
-          asm("pause");
+#if defined(__i386__)
+          __builtin_ia32_pause();
+#elif defined(__x86_64__)
+          __builtin_ia32_pause();
+#else
+          sched_yield();
+#endif
         }
       } while (*seqPtr == oldseq);
     }
@@ -98,7 +105,7 @@ extern "C" {
       }
     }
 
-  
+
   // FOR TEST PURPOSES
 
 #if defined(__i386__)
