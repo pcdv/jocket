@@ -1,0 +1,17 @@
+apply plugin: 'java'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testCompile group: 'junit', name: 'junit', version: '4.+'
+}
+
+task jni(type:Exec) {
+  workingDir 'src/main/c'
+  executable 'make'
+}
+
+test.dependsOn jni
+jni.dependsOn compileJava
