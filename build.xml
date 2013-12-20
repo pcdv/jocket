@@ -17,6 +17,7 @@
 	<target name="jar-main" depends="javac-main">
 		<jar destfile="jocket-${version}.jar">
 			<fileset dir="classes" includes="**" excludes="*/test/** */bench/**" />
+      <fileset dir="src/main/resources" includes="**" />
 		</jar>
 	</target>
 

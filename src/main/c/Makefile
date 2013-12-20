@@ -7,12 +7,14 @@ LIB = libJocketFutex$(ARCH).so
 all: jocket_futex_Futex.h lib
 
 jocket_futex_Futex.h:
-	javah -classpath ../../../classes jocket.futex.Futex
+	javah -classpath ../../../classes:../../../build/classes/main jocket.futex.Futex
 
 lib: $(OBJ)
 	gcc -shared -o $(LIB) $(OBJ) -lc -lrt
-	mkdir -p ../../../classes
-	cp $(LIB) ../../../classes
+	mkdir -p ../../../src/main/resources
+	mkdir -p ../../../src/test/resources
+	cp $(LIB) ../../../src/main/resources
+	cp $(LIB) ../../../src/test/resources
 
 clean:
 	rm -f *.o *.so *~ jocket_futex_Futex.h
