@@ -1,5 +1,4 @@
 classes
 *.jar
 .gradle
-gradle/
 build
