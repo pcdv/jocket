@@ -40,6 +40,7 @@
 			<classpath>
 				<fileset dir="lib" includes="*.jar" />
 				<pathelement location="classes" />
+                                <pathelement location="src/test/resources" />
 			</classpath>
 			<formatter type="plain" usefile="false" />
 			<batchtest haltonfailure="true">
