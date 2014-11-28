@@ -146,9 +146,7 @@ public class JocketWriter extends AbstractJocketBuffer {
     int pkt = PACKET_INFO + (wseq & packetMask) * LEN_PACKET_INFO;
 
     int mod = pend & alignMask;
-    if (mod != 0) {
-      this.pend += align - mod;
-    }
+    this.pend += align - mod;
     this.pstart = pend;
 
     acc.putInt(pkt, pend);
@@ -180,13 +178,13 @@ public class JocketWriter extends AbstractJocketBuffer {
 
   public void flush() {
     final int pkt = PACKET_INFO + (wseq & packetMask) * LEN_PACKET_INFO;
+    final ByteBufferAccessor acc = this.acc;
     if (dirty) {
       acc.putInt(pkt, pstart);
       acc.putInt(pkt + 4, pend - pstart);
       acc.putInt(WSEQ, ++wseq);
 
-      if (alignMask != 0)
-        this.pend += align - (pend & alignMask);
+      this.pend += align - (pend & alignMask);
       this.pstart = pend;
 
       dirty = false;
