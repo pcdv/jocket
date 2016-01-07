@@ -1,6 +1,9 @@
 package jocket.impl;
 
 import java.nio.ByteBuffer;
+import java.nio.MappedByteBuffer;
+
+import jocket.net.JocketFile;
 
 public class DefaultAccessor implements ByteBufferAccessor {
 
@@ -48,5 +51,11 @@ public class DefaultAccessor implements ByteBufferAccessor {
 
   public void limit(int limit) {
     buf.limit(limit);
+  }
+
+  @Override
+  public void unmap() {
+    if (buf instanceof MappedByteBuffer)
+      JocketFile.unmap((MappedByteBuffer) buf);
   }
 }

@@ -5,6 +5,7 @@ import java.nio.MappedByteBuffer;
 
 import jocket.futex.Futex;
 import jocket.futex.UnsafeUtil;
+import jocket.net.JocketFile;
 import sun.misc.Unsafe;
 
 public final class UnsafeAccessor implements ByteBufferAccessor {
@@ -35,4 +36,8 @@ public final class UnsafeAccessor implements ByteBufferAccessor {
     return buf;
   }
 
+  @Override
+  public void unmap() {
+    JocketFile.unmap(buf);
+  }
 }

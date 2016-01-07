@@ -10,4 +10,5 @@ public interface ByteBufferAccessor {
 
   ByteBuffer getBuffer();
 
+  void unmap();
 }

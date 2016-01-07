@@ -13,6 +13,7 @@ import java.util.Random;
 import jocket.impl.Const;
 import jocket.impl.JocketReader;
 import jocket.impl.JocketWriter;
+import sun.nio.ch.DirectBuffer;
 
 /**
  * Creates or opens an exchange file wrapped in a mapped byte buffer and makes
@@ -120,5 +121,11 @@ public class JocketFile implements Const {
 
   public MappedByteBuffer getBuffer() {
     return buf;
+  }
+
+  public static void unmap(MappedByteBuffer buffer)
+  {
+    sun.misc.Cleaner cleaner = ((DirectBuffer) buffer).cleaner();
+    cleaner.clean();
   }
 }

@@ -268,6 +268,7 @@ public class JocketWriter extends AbstractJocketBuffer {
     acc.putInt(WSEQ, -1);
     if (futex != null)
       futex.signal(-1);
+    acc.unmap();
   }
 
   /**

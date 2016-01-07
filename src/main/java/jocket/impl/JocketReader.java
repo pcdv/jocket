@@ -25,6 +25,7 @@ public class JocketReader extends AbstractJocketBuffer {
   protected void close0() {
     writeMemoryBarrier(); // not sure if really necessary
     acc.putInt(RSEQ, -1);
+    acc.unmap();
   }
 
   public int read(byte[] data) {
