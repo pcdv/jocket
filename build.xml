@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project name="jocket" default="dist">
 
-	<property name="version" value="0.5.0" />
+	<property name="version" value="0.6.0" />
 
 	<target name="dist" depends="clean, jni, jar-main, jar-bench">
 	</target>
