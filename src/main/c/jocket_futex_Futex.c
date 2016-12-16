@@ -6,6 +6,7 @@
 #include <jni.h>
 #include <sched.h>
 #include "jocket_futex_Futex.h"
+#include "jocket_futex_Futex_critical.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -44,6 +45,15 @@ extern "C" {
   JNIEXPORT void JNICALL Java_jocket_futex_Futex_pause
     (JNIEnv *env, jclass cls, jlong futAddr, jlong seqAddr, jint oldseq)
     {
+    JavaCritical_jocket_futex_Futex_pause(futAddr, seqAddr, oldseq);
+    }
+
+  /*
+   * Critical native version...
+   */
+  JNIEXPORT void JNICALL JavaCritical_jocket_futex_Futex_pause
+    (jlong futAddr, jlong seqAddr, jint oldseq)
+    {
       unsigned int i = 0;
       jint* seqPtr = (jint *)seqAddr;
       int* futex = (int*)futAddr;
@@ -75,6 +85,17 @@ extern "C" {
    */
   JNIEXPORT void JNICALL Java_jocket_futex_Futex_signal0
     (JNIEnv *env, jclass cls, jlong addr)
+    {
+      jint *ptr = (jint *)addr;
+      // a value of -1 implies that a thread is waiting
+      if (__sync_val_compare_and_swap(ptr, 0, 1) == -1) {
+        *ptr = 0;
+        syscall(SYS_futex, ptr, FUTEX_WAKE, 0, NULL, NULL, 0);
+      }
+    }
+
+  JNIEXPORT void JNICALL JavaCritical_jocket_futex_Futex_signal0
+    (jlong addr)
     {
       jint *ptr = (jint *)addr;
       // a value of -1 implies that a thread is waiting
