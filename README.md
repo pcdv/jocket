@@ -84,10 +84,10 @@ ant
 Dependency
 ----------
 
-Jocket is now published on bintray so you can add the following
+Jocket is now published on bintray/jcenter so you can add the following
 dependency:
 ```
-compile 'jocket:jocket:0.1'
+compile 'com.github.pcdv.jocket:jocket:0.2'
 ```
 
 See https://bintray.com/paulcdv/maven/jocket

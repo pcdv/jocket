@@ -6,7 +6,7 @@ apply plugin: 'java'
 apply plugin: 'com.jfrog.bintray'
 apply plugin: 'maven-publish'
 
-group = 'jocket'
+group = 'com.github.pcdv.jocket'
 version = "${jocket_version}"
 
 repositories {
@@ -52,7 +52,7 @@ publishing {
   publications {
     MyPublication(MavenPublication) {
       from components.java
-      groupId 'jocket'
+      groupId 'com.github.pcdv.jocket'
       artifactId 'jocket'
       version "${version}"
 
