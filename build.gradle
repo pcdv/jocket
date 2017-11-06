@@ -1,4 +1,12 @@
+
+plugins {
+  id "com.jfrog.bintray" version "1.7"
+}
+
+
 apply plugin: 'java'
+apply plugin: 'com.jfrog.bintray'
+apply plugin: 'maven-publish'
 
 repositories {
     mavenCentral()
@@ -16,3 +24,44 @@ task jni(type:Exec) {
 test.dependsOn jni
 jar.dependsOn jni
 jni.dependsOn compileJava
+
+
+bintray {
+  user = System.getenv('BINTRAY_USER')
+  key = System.getenv('BINTRAY_KEY')
+  publications = ['MyPublication']
+  publish = true
+
+  pkg {
+    repo = 'maven'
+    name = 'jocket'
+    userOrg = System.getenv('BINTRAY_USER')
+    licenses = ['MIT']
+    vcsUrl = 'https://github.com/pcdv/jocket.git'
+    version {
+      name = "${jocket_version}"
+      desc = "Experimental shared memory socket ${jocket_version}"
+      released = new Date()
+    }
+  }
+}
+
+
+publishing {
+  publications {
+    MyPublication(MavenPublication) {
+      from components.java
+      groupId 'jocket'
+      artifactId 'jocket'
+      version "${version}"
+
+      artifact sourceJar {
+        classifier "sources"
+      }
+    }
+  }
+}
+
+task sourceJar(type: Jar) {
+  from sourceSets.main.allJava
+}
