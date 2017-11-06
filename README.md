@@ -49,8 +49,6 @@ Dumping results in /tmp/Socket
 99.9999%      (      1) :  4546,98 (us)
 ```
 
-NB: I'm still investigating on the latency spikes (they represent less than 0.01% of the test iterations). Any help is appreciated BTW :)
-
 The following options can be passed to the run-bench.sh script
  - -Dtcp=true : uses a normal socket instead of Jocket (default=false)
  - -Dreps=1000 : sets the number of repetitions to 1000 (default=300000)
@@ -128,28 +126,3 @@ OutputStream out = sock.getOutputStream();
 
 Otherwise, Jocket readers and writers have their own API allowing to perform non-blocking read/writes, 
 potentially faster than with input/output streams.
-
-
-Credits
--------
-
-This project takes some ideas from @mjpt777 and @peter-lawrey
-
-
-Changes
--------
-
-### 0.5.0
-
-Contains misc optimizations, especially regarding the futex implementation.
-
-### 0.4.0
-
-Includes a new waiting strategy based on a [Futex](http://en.wikipedia.org/wiki/Futex). This avoids too heavy spinning and
-keeps latency low even no data has been received for a long time.
-
-### 0.3.0
-
-Align packets on cache lines by default (avoids false sharing).
-
-Use native ordering in direct byte buffer to avoid useless byte swaps.
