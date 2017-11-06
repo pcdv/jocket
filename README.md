@@ -81,6 +81,17 @@ ant
 ./run-bench.sh -Dtcp=true
 ```
 
+Dependency
+----------
+
+Jocket is now published on bintray so you can add the following
+dependency:
+```
+compile 'jocket:jocket:0.1'
+```
+
+See https://bintray.com/paulcdv/maven/jocket
+
 API
 ---
 

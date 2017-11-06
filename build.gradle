@@ -1,12 +1,13 @@
-
 plugins {
-  id "com.jfrog.bintray" version "1.7"
+  id "com.jfrog.bintray" version "1.8.0"
 }
-
 
 apply plugin: 'java'
 apply plugin: 'com.jfrog.bintray'
 apply plugin: 'maven-publish'
+
+group = 'jocket'
+version = "${jocket_version}"
 
 repositories {
     mavenCentral()
