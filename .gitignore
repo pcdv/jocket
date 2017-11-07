@@ -4,3 +4,6 @@ classes
 build
 .idea
 *.iml
+.project
+.classpath
+.settings
