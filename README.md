@@ -71,15 +71,18 @@ How to build
 
 Just run the following commands to build Jocket and run the benchmark.
 
-NB: `$JAVA_HOME` must be set to a valid JDK directory.
+`$JAVA_HOME` must be set to a valid JDK directory otherwise the JNI
+build will fail.
 
 ```
 git clone https://github.com/pcdv/jocket.git
 cd jocket
-ant
+./gradlew build
 ./run-bench.sh
 ./run-bench.sh -Dtcp=true
 ```
+
+You can run `ant` instead of `gradlew` if you have it installed.
 
 Dependency
 ----------
