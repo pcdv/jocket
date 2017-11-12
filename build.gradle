@@ -10,22 +10,26 @@ group = 'com.github.pcdv.jocket'
 version = "${jocket_version}"
 
 repositories {
-    mavenCentral()
+  mavenCentral()
 }
 
 dependencies {
-    testCompile group: 'junit', name: 'junit', version: '4.+'
+  testCompile group: 'junit', name: 'junit', version: '4.+'
 }
 
-task jni(type:Exec) {
+task jni(type: Exec) {
   workingDir 'src/main/c'
   executable 'make'
 }
-
-test.dependsOn jni
-jar.dependsOn jni
 jni.dependsOn compileJava
 
+import org.gradle.internal.os.OperatingSystem
+
+if (OperatingSystem.current().isLinux()) {
+  test.dependsOn jni
+  jar.dependsOn jni
+} else
+  println("Disabling JNI build because OS is not UNIX")
 
 bintray {
   user = System.getenv('BINTRAY_USER')

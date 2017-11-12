@@ -77,12 +77,16 @@ build will fail.
 ```
 git clone https://github.com/pcdv/jocket.git
 cd jocket
-./gradlew build
+./gradlew testClasses
 ./run-bench.sh
 ./run-bench.sh -Dtcp=true
 ```
 
 You can run `ant` instead of `gradlew` if you have it installed.
+
+Notes:
+ - the JNI build requires Linux for its futex implementation
+ - the build will fail on macOS and on Windows due to the JNI build
 
 Dependency
 ----------

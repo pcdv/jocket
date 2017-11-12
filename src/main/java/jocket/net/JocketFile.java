@@ -2,6 +2,7 @@ package jocket.net;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteOrder;
@@ -112,11 +113,17 @@ public class JocketFile implements Const {
     try {
       // under linux, try to use tmpfs
       File dir = new File("/dev/shm");
-      return new File(dir, "jocket-" + new Random().nextInt(Integer.MAX_VALUE));
+      if (dir.exists()) {
+        File file =
+          new File(dir, "jocket-" + new Random().nextInt(Integer.MAX_VALUE));
+        new FileOutputStream(file).close();
+        return file;
+      }
     }
     catch (Exception ex) {
-      return File.createTempFile("jocket", "");
     }
+    System.err.println("Could not create file in /dev/shm");
+    return File.createTempFile("jocket", "");
   }
 
   public MappedByteBuffer getBuffer() {

@@ -22,6 +22,7 @@ public abstract class AbstractJocketSocketTest {
         try {
           s = srv.accept();
         } catch (IOException e) {
+          e.printStackTrace();
         }
       }
     }.start();
