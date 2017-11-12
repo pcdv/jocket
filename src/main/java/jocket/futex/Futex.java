@@ -109,7 +109,6 @@ public class Futex implements WaitStrategy {
     } catch (Throwable e) {
       libAvailable = false;
       System.err.println("WARN: JNI futex lib is NOT available: " + e);
-      e.printStackTrace();
     }
   }
 

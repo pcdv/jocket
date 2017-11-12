@@ -4,22 +4,25 @@ import java.util.concurrent.locks.LockSupport;
 
 public class BusyYieldSleep implements WaitStrategy {
 
+  public static final int SPIN = 1000000;
+
+  public static final int YIELD = SPIN + 1;
+
+  public static final int SLEEP = YIELD + 1;
+
   private int counter;
 
   @Override
   public void pauseWhile(int seq) {
     int counter = this.counter++;
-    if (counter < 10000)
+    if (counter < SPIN)
       return;
-    else if (counter < 20000)
+    else if (counter < YIELD)
       Thread.yield();
-    else if (counter < 500000)
-      LockSupport.parkNanos(10);
+    else if (counter < SLEEP)
+      LockSupport.parkNanos(1);
     else {
-      try {
-        Thread.sleep(1);
-      } catch (InterruptedException e) {
-      }
+      this.counter = 0;
     }
   }
 
