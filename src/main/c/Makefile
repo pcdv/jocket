@@ -7,7 +7,8 @@ LIB = libJocketFutex$(ARCH).so
 all: jocket_futex_Futex.h lib
 
 jocket_futex_Futex.h:
-	javah -classpath ../../../classes:../../../build/classes/main jocket.futex.Futex
+  # use classpath compatible with ant or gradle build
+	javah -classpath ../../../classes:../../../build/classes/java/main jocket.futex.Futex
 
 lib: $(OBJ)
 	gcc -shared -o $(LIB) $(OBJ) -lc -lrt
