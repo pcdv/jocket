@@ -3,19 +3,32 @@ Jocket
 
 Low-latency replacement for local Java sockets, using shared memory.
 
+It has been developed under Linux and works optimally on this platform
+thanks to the use of a [futex](https://en.wikipedia.org/wiki/Futex) accessed
+through JNI. The futex allows to implement inter-process wait/notify.
 
-Status
-------
+Jocket can work without a futex but it involves active waiting or sleeping
+so it is not ideal in all situations. It is possible that a similar feature
+exists on macOS/Windows but I have not looked into it yet.
 
-Current benchmarks show a 10-100x performance improvement when compared to a standard socket.
+I don't currently use Jocket in production but several people have
+contacted me for advice or bug reports so I suspect some people do :)
+
+Performance
+-----------
+
+Current benchmarks show a 10-100x performance improvement when compared to
+a standard socket.
 
 ![alt text](docs/bench.png "The thick red line is around 500 nanoseconds")
 
-The chart above displays the RTT latency (in microseconds) between two processes:
- - the client sends a PING (4 bytes)
- - the server replies with a PONG (1024 bytes)
+The chart above displays the rountrip latency (in microseconds) between two
+processes:
+ - T0: the client sends a PING (4 bytes) to the server
+ - T1: the client receives a PONG (1024 bytes) from the server
 
-This benchmark was run on an Intel Core i5-2500 (4-core 3.30GHz).
+This benchmark was run on an old Dell D830 laptop with an Intel Core i5-2500
+(4-core 3.30GHz) CPU.
 
 The output of the benchmark should look like:
 
@@ -82,22 +95,32 @@ cd jocket
 ./run-bench.sh -Dtcp=true
 ```
 
-You can run `ant` instead of `gradlew` if you have it installed.
+You can run `ant` instead of `gradlew` if you have it installed (although I
+might remove ant support in the future).
 
 Notes:
  - the JNI build requires Linux for its futex implementation
- - the build will fail on macOS and on Windows due to the JNI build
+ - the build should now work on macOS and on Windows as the JNI library is
+ not generated but the lack of inter process synchronization will make it
+ suboptimal
 
-Dependency
+Using Jocket as a dependency
 ----------
 
-Jocket is now published on bintray/jcenter so you can add the following
-dependency:
-```
-compile 'com.github.pcdv.jocket:jocket:0.2'
+Jocket is now published on [bintray/jcenter](https://bintray.com/paulcdv/maven/jocket)
+so you can add the following to your `build.gradle` file:
+
+```groovy
+repositories {
+  jcenter()
+}
+
+dependencies {
+  compile 'com.github.pcdv.jocket:jocket:0.2'
+}
 ```
 
-See https://bintray.com/paulcdv/maven/jocket
+NB: the published jar includes the linux x64 JNI library.
 
 API
 ---
