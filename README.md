@@ -90,7 +90,7 @@ build will fail.
 ```
 git clone https://github.com/pcdv/jocket.git
 cd jocket
-./gradlew testClasses
+./gradlew jni build testClasses
 ./run-bench.sh
 ./run-bench.sh -Dtcp=true
 ```
