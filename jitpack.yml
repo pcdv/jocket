@@ -1,0 +1,3 @@
+# runs Gradle, which then uses (or downloads) a JDK 21 toolchain. Same as flak
+jdk:
+  - openjdk17

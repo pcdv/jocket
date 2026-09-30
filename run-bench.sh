@@ -1,7 +1,11 @@
 #!/bin/bash
 # Runs the benchmark. Build first with: ./gradlew testClasses
 
-export CLASSPATH=build/classes/java/main:build/resources/main:build/classes/java/test
+sep=:
+case "$(uname -s)" in
+  MINGW* | MSYS* | CYGWIN*) sep=';' ;; # Windows
+esac
+export CLASSPATH="build/classes/java/main${sep}build/resources/main${sep}build/classes/java/test"
 
 java "$@" jocket.bench.BenchServer &
 server=$!

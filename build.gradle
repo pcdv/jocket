@@ -6,8 +6,6 @@ plugins {
   id 'maven-publish'
 }
 
-group = 'com.github.pcdv.jocket'
-
 repositories {
   mavenCentral()
 }
@@ -36,11 +34,15 @@ test {
   systemProperty 'junit.jupiter.execution.timeout.thread.mode.default', 'SEPARATE_THREAD'
 }
 
-// The futex library is Linux-only. Elsewhere Jocket falls back on busy waiting.
+// The futex library is Linux-only. Elsewhere, Jocket spins, yields, then sleeps
+// when waiting (see BusyYieldSleep).
 def jniDir = layout.buildDirectory.dir('jni')
 def jniHeaders = tasks.named('compileJava', JavaCompile).flatMap { it.options.headerOutputDirectory }
 def jniJdk = javaToolchains.compilerFor(java.toolchain).map { it.metadata.installationPath.asFile.absolutePath }
 def jniSource = file('src/main/c/jocket_futex_Futex.c')
+// same naming as LibLoader.platform()
+def jniArch = System.getProperty('os.arch').with { it in ['amd64', 'x86_64'] ? 'x86_64' : it == 'arm64' ? 'aarch64' : it }
+def jniLib = "native/linux-${jniArch}/libJocketFutex.so"
 
 def jni = tasks.register('jni', Exec) {
   description = 'Builds the JNI futex library (Linux only).'
@@ -51,18 +53,18 @@ def jni = tasks.register('jni', Exec) {
   inputs.dir(jniHeaders)
   outputs.dir(jniDir)
 
-  // LibLoader looks for lib<name>64.so at the root of the classpath
+  // for the architecture of the build machine only
   executable 'gcc'
   argumentProviders.add({
     def jdk = jniJdk.get()
     ['-O2', '-Wall', '-fPIC', '-shared',
      "-I${jniHeaders.get().asFile}", "-I${jdk}/include", "-I${jdk}/include/linux",
-     '-o', jniDir.get().file('libJocketFutex64.so').asFile.absolutePath,
+     '-o', jniDir.get().file(jniLib).asFile.absolutePath,
      jniSource.absolutePath]
   } as CommandLineArgumentProvider)
 
   doFirst {
-    jniDir.get().asFile.mkdirs()
+    jniDir.get().file(jniLib).asFile.parentFile.mkdirs()
   }
 }
 

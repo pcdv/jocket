@@ -2,6 +2,7 @@ package jocket.bench;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -78,8 +79,9 @@ public final class BenchClient implements Settings {
     doRun("Running test", REPS, PAUSE);
 
     if (!NOSTATS) {
-      System.out.printf("Dumping results in /tmp/%s\n", OUTPUT_FILE);
-      dumpResults(OUTPUT_FILE);
+      File file = new File(System.getProperty("java.io.tmpdir"), OUTPUT_FILE);
+      System.out.printf("Dumping results in %s\n", file);
+      dumpResults(file);
     }
   }
 
@@ -118,11 +120,11 @@ public final class BenchClient implements Settings {
   private static final double[] PTILES = { 1, 10, 50, 99, 99.9, 99.99, 99.999,
     99.9999 };
 
-  private void dumpResults(String fileName) throws IOException {
+  private void dumpResults(File file) throws IOException {
     long[] sorted = nanos.clone();
     Arrays.sort(sorted);
 
-    PrintWriter w = new PrintWriter(new FileOutputStream("/tmp/" + fileName));
+    PrintWriter w = new PrintWriter(new FileOutputStream(file));
     for (int i = 0; i < nanos.length; i++)
       w.println((nanos[i] / 1000.0) + "\t" + (sorted[i] / 1000.0));
     w.close();
