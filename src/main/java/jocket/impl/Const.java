@@ -31,6 +31,12 @@ public interface Const {
   int WCLOSED = WSEQ + 8;
 
   /**
+   * Pid of the writer's process (a long), followed by the identifier of its
+   * PID namespace (a long), allowing the reader to detect its death.
+   */
+  int WPID = WSEQ + 16;
+
+  /**
    * Position at which the reader puts its sequence number (a long).
    */
   int RSEQ = WSEQ + _CACHELINE;
@@ -40,6 +46,12 @@ public interface Const {
    * the writer fetches anyway.
    */
   int RCLOSED = RSEQ + 8;
+
+  /**
+   * Pid of the reader's process (a long), followed by the identifier of its
+   * PID namespace (a long), allowing the writer to detect its death.
+   */
+  int RPID = RSEQ + 16;
 
   /**
    * Unused.

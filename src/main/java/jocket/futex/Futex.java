@@ -1,5 +1,6 @@
 package jocket.futex;
 
+import java.lang.System.Logger.Level;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.nio.ByteBuffer;
@@ -87,7 +88,10 @@ public final class Futex {
       return true;
     }
     catch (Throwable e) {
-      System.err.println("WARN: JNI futex lib is NOT available: " + e);
+      // expected elsewhere than under Linux
+      boolean linux = System.getProperty("os.name").startsWith("Linux");
+      System.getLogger(Futex.class.getName())
+          .log(linux ? Level.WARNING : Level.DEBUG, "JNI futex library not available", e);
       return false;
     }
   }

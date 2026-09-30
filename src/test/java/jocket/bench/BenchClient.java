@@ -5,6 +5,7 @@ import java.io.DataOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.net.ConnectException;
 import java.net.Socket;
 import java.util.Arrays;
 import java.util.concurrent.locks.LockSupport;
@@ -30,16 +31,38 @@ public final class BenchClient implements Settings {
     this.nanos = new long[NOSTATS ? 0 : REPS];
     this.buf = new byte[Math.max(REPLY_SIZE, 4)];
     if (USE_JOCKET) {
-      JocketSocket s = new JocketSocket(PORT);
+      JocketSocket s = connect(() -> new JocketSocket(PORT));
       in = new DataInputStream(s.getInputStream());
       out = new DataOutputStream(s.getOutputStream());
     }
     else {
       @SuppressWarnings("resource")
-      Socket s = new Socket("localhost", PORT);
+      Socket s = connect(() -> new Socket("localhost", PORT));
       s.setTcpNoDelay(true);
       in = new DataInputStream(s.getInputStream());
       out = new DataOutputStream(s.getOutputStream());
+    }
+  }
+
+  private interface Connector<T> {
+    T connect() throws IOException;
+  }
+
+  /**
+   * Retries for a while: the server, started at the same time, may not be
+   * listening yet.
+   */
+  private static <T> T connect(Connector<T> connector) throws IOException {
+    long deadline = System.nanoTime() + 10_000_000_000L;
+    while (true) {
+      try {
+        return connector.connect();
+      }
+      catch (ConnectException e) {
+        if (System.nanoTime() > deadline)
+          throw e;
+        LockSupport.parkNanos(50_000_000);
+      }
     }
   }
 

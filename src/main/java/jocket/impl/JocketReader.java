@@ -27,14 +27,28 @@ public class JocketReader extends AbstractJocketBuffer {
 
   private Futex futex;
 
+  /**
+   * True once the writer's process is known to be dead: it is handled as if
+   * the writer was closed.
+   */
+  private boolean writerDied;
+
   private ByteBuffer currentPacket;
 
+  /**
+   * The buffer is unmapped (if it is a mapped one) when closed.
+   */
   public JocketReader(ByteBuffer buf, int npackets) {
-    super(buf, npackets);
+    this(buf, npackets, () -> MappedBuffers.unmap(buf));
   }
 
+  /**
+   * @param release called once the buffer is not accessed anymore, after
+   *        close()
+   */
   public JocketReader(ByteBuffer buf, int npackets, Runnable release) {
     super(buf, npackets, release);
+    publishPid(RPID);
   }
 
   @Override
@@ -59,6 +73,10 @@ public class JocketReader extends AbstractJocketBuffer {
     int res;
     try {
       res = read0(data, off, len);
+      if (res == 0 && peerDied(WPID)) {
+        writerDied = true;
+        res = read0(data, off, len);
+      }
     }
     finally {
       exit();
@@ -79,8 +97,10 @@ public class JocketReader extends AbstractJocketBuffer {
       return -1;
     int res;
     try {
-      while ((res = read0(data, off, len)) == 0 && !isClosed())
-        pause();
+      while ((res = read0(data, off, len)) == 0 && !isClosed()) {
+        if (pause())
+          writerDied = true;
+      }
     }
     finally {
       exit();
@@ -134,25 +154,30 @@ public class JocketReader extends AbstractJocketBuffer {
   }
 
   /**
-   * Returns true if the writer is closed and all its packets have been read.
+   * Returns true if the writer is closed (or dead) and all its packets have
+   * been read.
    */
   private boolean writerClosed() {
     // the writer sets its flag after publishing its last packet: once the
     // flag is seen, wseq has its final value
-    return getIntAcquire(WCLOSED) != 0 && !hasPacket();
+    return (getIntAcquire(WCLOSED) != 0 || writerDied) && !hasPacket();
   }
 
-  private void pause() {
+  /**
+   * Waits a little for new data. Returns true if the writer's process is dead.
+   */
+  private boolean pause() {
     if (futex == null) {
       waiter.pause();
-      return;
+      return peerDied(WPID);
     }
     for (int i = 0; i < SPIN; i++) {
       if (getLongAcquire(WSEQ) != wseq || getIntAcquire(WCLOSED) != 0 || isClosed())
-        return;
+        return false;
       Thread.onSpinWait();
     }
     futex.await(FUTEX_TIMEOUT);
+    return checkPeer(WPID);
   }
 
   /**
@@ -183,8 +208,11 @@ public class JocketReader extends AbstractJocketBuffer {
         // better.
         packet = currentPacket = buf.slice(packetPos, packetSize).order(buf.order());
       }
-      else
+      else {
+        if (peerDied(WPID))
+          writerDied = true;
         closedByWriter = writerClosed();
+      }
     }
     finally {
       exit();
@@ -257,5 +285,14 @@ public class JocketReader extends AbstractJocketBuffer {
 
   public WaitStrategy getWaitStrategy() {
     return waiter;
+  }
+
+  /**
+   * Sets the strategy used by {@link #readBlocking(byte[], int, int)} to wait
+   * for data, when not waiting on the futex. It must not be shared with other
+   * readers or writers.
+   */
+  public void setWaitStrategy(WaitStrategy waiter) {
+    this.waiter = waiter;
   }
 }

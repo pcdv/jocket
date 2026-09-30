@@ -5,6 +5,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Base class for JocketReader and JocketWriter.
@@ -28,6 +29,12 @@ public abstract class AbstractJocketBuffer implements Const, Closeable {
 
   private static final VarHandle LONG =
     MethodHandles.byteBufferViewVarHandle(long[].class, ByteOrder.nativeOrder());
+
+  /**
+   * Minimum time between two checks that the peer process is alive.
+   */
+  private static final long PEER_CHECK_INTERVAL =
+    TimeUnit.MILLISECONDS.toNanos(Long.getLong("jocket.peerCheckMillis", 1000));
 
   private static final VarHandle CLOSED;
 
@@ -81,11 +88,11 @@ public abstract class AbstractJocketBuffer implements Const, Closeable {
   private volatile boolean busy;
 
   /**
-   * The buffer is unmapped (if it is a mapped one) when closed.
+   * Number of calls to peerDied(), which looks at the clock every 1024 calls.
    */
-  public AbstractJocketBuffer(ByteBuffer buf, int npackets) {
-    this(buf, npackets, () -> MappedBuffers.unmap(buf));
-  }
+  private int idle;
+
+  private long lastPeerCheck;
 
   /**
    * @param release called once the buffer is not accessed anymore, after
@@ -136,6 +143,39 @@ public abstract class AbstractJocketBuffer implements Const, Closeable {
 
   protected final void setLongRelease(int pos, long value) {
     LONG.setRelease(buf, pos, value);
+  }
+
+  /**
+   * Writes the pid and PID namespace of the current process at specified
+   * position, for the other side to check if it is alive.
+   */
+  protected final void publishPid(int pos) {
+    setLong(pos + 8, Processes.NAMESPACE);
+    setLongRelease(pos, Processes.PID);
+  }
+
+  /**
+   * To be called when an operation cannot progress (no data to read, or no
+   * space to write). Returns true if the peer process, whose pid is at
+   * specified position, is dead. Cheap: it looks at the clock every 1024
+   * calls, and checks the peer at most once per interval.
+   */
+  protected final boolean peerDied(int pidPos) {
+    if ((++idle & 1023) != 0)
+      return false;
+    return checkPeer(pidPos);
+  }
+
+  /**
+   * Same as {@link #peerDied(int)}, looking at the clock at each call: for
+   * callers already calling it rarely (e.g. after sleeping on the futex).
+   */
+  protected final boolean checkPeer(int pidPos) {
+    long now = System.nanoTime();
+    if (now - lastPeerCheck < PEER_CHECK_INTERVAL)
+      return false;
+    lastPeerCheck = now;
+    return !Processes.isAlive(getLongAcquire(pidPos), getLong(pidPos + 8));
   }
 
   /**

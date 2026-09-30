@@ -33,14 +33,28 @@ public class JocketWriter extends AbstractJocketBuffer {
 
   private Futex futex;
 
+  /**
+   * True once the reader's process is known to be dead: it is handled as if
+   * the reader was closed.
+   */
+  private boolean readerDied;
+
   private ByteBuffer currentPacket;
 
+  /**
+   * The buffer is unmapped (if it is a mapped one) when closed.
+   */
   public JocketWriter(ByteBuffer buf, int npackets) {
-    super(buf, npackets);
+    this(buf, npackets, () -> MappedBuffers.unmap(buf));
   }
 
+  /**
+   * @param release called once the buffer is not accessed anymore, after
+   *        close()
+   */
   public JocketWriter(ByteBuffer buf, int npackets, Runnable release) {
     super(buf, npackets, release);
+    publishPid(WPID);
   }
 
   /**
@@ -63,7 +77,8 @@ public class JocketWriter extends AbstractJocketBuffer {
    * @param off the position in array of data that must be sent
    * @param len the number of bytes to write
    * @return the number of bytes written
-   * @throws ClosedException if the socket is closed
+   * @throws ClosedException if the socket is closed, or the reader's process
+   *         is dead
    */
   public int write(final byte[] data, final int off, final int len) {
     if (!enter())
@@ -77,35 +92,40 @@ public class JocketWriter extends AbstractJocketBuffer {
     }
     if (res < 0) {
       close();
-      throw new ClosedException("Closed by reader");
+      throw new ClosedException(readerDied ? "Reader is dead" : "Closed by reader");
     }
     return res;
   }
 
   /**
-   * Returns the number of bytes written, or -1 if the reader is closed.
+   * Returns the number of bytes written, or -1 if the reader is closed (or
+   * dead).
    */
   private int write0(byte[] data, int off, int len) {
     if (getIntAcquire(RCLOSED) != 0)
       return -1;
 
     final long rseq = getLongAcquire(RSEQ);
-    if (!canWrite(rseq))
-      return 0;
 
     // TODO: implement anti-truncation mechanism (write at 0 if remaining
     // space is too small)
-    len = Math.min(getAvailableSpace(rseq), len);
-    if (len > 0) {
-      dirty = true;
-      buf.put(dataPos(pend), data, off, len);
-      this.pend += len;
-
-      // flush when reaching end of buffer, otherwise next write will
-      // generate an inconsistent packet (overflowing the buffer)
-      if ((this.pend & dataMask) == 0) {
-        flush0();
+    len = canWrite(rseq) ? Math.min(getAvailableSpace(rseq), len) : 0;
+    if (len <= 0) {
+      if (peerDied(RPID)) {
+        readerDied = true;
+        return -1;
       }
+      return 0;
+    }
+
+    dirty = true;
+    buf.put(dataPos(pend), data, off, len);
+    this.pend += len;
+
+    // flush when reaching end of buffer, otherwise next write will
+    // generate an inconsistent packet (overflowing the buffer)
+    if ((this.pend & dataMask) == 0) {
+      flush0();
     }
     return len;
   }
@@ -161,6 +181,8 @@ public class JocketWriter extends AbstractJocketBuffer {
         final long rseq = getLongAcquire(RSEQ);
         if (canWrite(rseq))
           packet = newPacket0(rseq, size);
+        if (packet == null && peerDied(RPID))
+          closedByReader = readerDied = true;
       }
     }
     finally {
@@ -168,7 +190,7 @@ public class JocketWriter extends AbstractJocketBuffer {
     }
     if (closedByReader) {
       close();
-      throw new ClosedException("Closed by reader");
+      throw new ClosedException(readerDied ? "Reader is dead" : "Closed by reader");
     }
     return packet;
   }
