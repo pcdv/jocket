@@ -219,10 +219,10 @@ architecture of the build machine only.
 
 ## Changelog
 
-### 0.3 (unreleased)
+### 1.0.0
 
 - Requires Java 21.
-- The layout of exchange files and the handshake have changed: version 0.3
+- The layout of exchange files and the handshake have changed: version 1.0.0
   cannot connect to earlier versions.
 - Shared memory is accessed with the required ordering guarantees (acquire /
   release, through VarHandles), including on ARM, e.g. Apple Silicon.
