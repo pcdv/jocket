@@ -3,7 +3,7 @@ package jocket.net;
 import java.io.Closeable;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.File;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -53,55 +53,70 @@ public class JocketSocket implements Closeable {
    * @throws IOException
    */
   public JocketSocket(int port) throws IOException {
-    // FIXME: getLoopackAddress() == @since 1.7
-    Socket s = new Socket(InetAddress.getByName(null), port);
-    // allows to wakeup if server never does the handshake
-    s.setSoTimeout(5000);
+    this(connect(port));
+  }
 
-    DataOutputStream out = new DataOutputStream(s.getOutputStream());
-    out.writeInt(ServerJocket.MAGIC);
-    out.flush();
+  private JocketSocket(Ends ends) {
+    this(ends.reader(), ends.writer());
+  }
 
-    DataInputStream in = new DataInputStream(s.getInputStream());
-    int magic = 0;
-    try {
-      magic = in.readInt();
+  /**
+   * The reader and writer obtained from the handshake.
+   */
+  private record Ends(JocketReader reader, JocketWriter writer) {
+  }
+
+  /**
+   * Performs the handshake: receives the paths of the exchange files from the
+   * server, and opens them.
+   */
+  private static Ends connect(int port) throws IOException {
+    try (Socket s = new Socket(InetAddress.getLoopbackAddress(), port)) {
+      // allows to wakeup if server never does the handshake
+      s.setSoTimeout(5000);
+
+      DataOutputStream out = new DataOutputStream(s.getOutputStream());
+      out.writeInt(ServerJocket.MAGIC);
+      out.flush();
+
+      DataInputStream in = new DataInputStream(s.getInputStream());
+      int magic;
+      try {
+        magic = in.readInt();
+      }
+      catch (SocketTimeoutException | EOFException e) {
+        magic = 0;
+      }
+      if (magic != ServerJocket.MAGIC)
+        throw new IOException("Server does not support Jocket protocol");
+
+      JocketFile jfr = JocketFile.openReceived(in.readUTF());
+      JocketFile jfw = null;
+      try {
+        jfw = JocketFile.openReceived(in.readUTF());
+
+        // tells the server that both files are open
+        out.writeInt(0);
+        out.flush();
+
+        JocketReader reader = jfr.reader();
+        JocketWriter writer = jfw.writer();
+        if (Futex.isAvailable()) {
+          writer.useFutex();
+          reader.useFutex();
+        }
+        return new Ends(reader, writer);
+      }
+      finally {
+        // the mappings are released when the socket is closed
+        jfr.deleteFile();
+        jfr.close();
+        if (jfw != null) {
+          jfw.deleteFile();
+          jfw.close();
+        }
+      }
     }
-    catch (SocketTimeoutException timeout) {
-    }
-
-    if (magic != ServerJocket.MAGIC) {
-      s.close();
-      throw new IOException("Server does not support Jocket protocol");
-    }
-
-    File r = new File(in.readUTF());
-    File w = new File(in.readUTF());
-
-    JocketFile jfr = new JocketFile(r);
-    JocketFile jfw = new JocketFile(w);
-
-    jfr.deleteFile();
-    jfw.deleteFile();
-
-    out.writeInt(0);
-    s.close();
-
-    this.reader = jfr.reader();
-    this.writer = jfw.writer();
-    // the mappings are released when the socket is closed
-    jfr.close();
-    jfw.close();
-
-    if (Futex.isAvailable()) {
-      writer.useFutex();
-      reader.useFutex();
-    }
-
-    this.output = new JocketOutputStream(writer);
-    this.input = new JocketInputStream(reader);
-
-    addShutdownHook(this);
   }
 
   private synchronized static void addShutdownHook(JocketSocket s) {

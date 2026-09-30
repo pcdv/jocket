@@ -1,16 +1,21 @@
 package jocket.net;
 
+import static java.nio.file.StandardOpenOption.READ;
+import static java.nio.file.StandardOpenOption.WRITE;
+
 import java.io.Closeable;
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileChannel.MapMode;
-import java.util.Random;
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 import jocket.impl.Const;
 import jocket.impl.JocketReader;
@@ -28,13 +33,26 @@ import jocket.impl.MappedBuffers;
  */
 public class JocketFile implements Const, Closeable {
 
-  private final MappedByteBuffer buf;
+  private static final String PREFIX = "jocket-";
 
-  private final RandomAccessFile io;
+  /**
+   * Directory of exchange files: /dev/shm (tmpfs, never written to disk) under
+   * Linux, the temporary directory elsewhere. Can be set with -Djocket.dir, to
+   * the same value for the server and its clients.
+   */
+  private static final Path DIR = directory();
+
+  private final MappedByteBuffer buf;
 
   private final int maxPackets;
 
-  private final File file;
+  private final Path path;
+
+  /**
+   * True if the file was created by this JocketFile: it is deleted when
+   * unmapped.
+   */
+  private final boolean created;
 
   private JocketReader reader;
 
@@ -49,57 +67,119 @@ public class JocketFile implements Const, Closeable {
   private boolean closed;
 
   /**
-   * Creates a new exchange file and associated reader and writer.
+   * True if deleteFile() failed, because the file is mapped (Windows): it is
+   * deleted when unmapped.
+   */
+  private boolean deletePending;
+
+  /**
+   * Creates a new exchange file, accessible only to its owner.
    */
   public JocketFile(int maxPackets, int capacity) throws IOException {
-    this(createTempFile(), true, maxPackets, capacity);
+    if (Integer.bitCount(maxPackets) != 1)
+      throw new IllegalArgumentException("Max packets must be a power of 2");
+    if (Integer.bitCount(capacity) != 1)
+      throw new IllegalArgumentException("Capacity must be a power of 2");
+    long size = fileSize(maxPackets, capacity);
+    if (size > Integer.MAX_VALUE)
+      throw new IllegalArgumentException("Exchange file too big: " + size + " bytes");
+
+    // created atomically, with a random name, and rw------- on POSIX systems
+    this.path = Files.createTempFile(DIR, PREFIX, null);
+    this.created = true;
+    this.maxPackets = maxPackets;
+
+    try (FileChannel channel = FileChannel.open(path, READ, WRITE)) {
+      // writes zeros rather than just setting the size, so that memory is
+      // allocated now rather than when data is first written
+      ByteBuffer zeros = ByteBuffer.allocate(64 * 1024);
+      for (long pos = 0; pos < size; pos += zeros.limit()) {
+        zeros.clear().limit((int) Math.min(zeros.capacity(), size - pos));
+        while (zeros.hasRemaining())
+          channel.write(zeros);
+      }
+      buf = map(channel, size);
+    }
+    catch (IOException | RuntimeException e) {
+      Files.deleteIfExists(path);
+      throw e;
+    }
+
+    buf.putInt(META_MAX_PACKETS, maxPackets);
+    buf.putInt(META_CAPACITY, capacity);
   }
 
   /**
    * Opens and wrap specified exchange file with a reader and writer.
    */
   public JocketFile(File file) throws IOException {
-    this(file, false, -1, -1);
+    this(file.toPath());
   }
 
-  private JocketFile(File file, boolean create, int maxPackets, int capacity) throws IOException {
-    if (!create && !file.exists())
-      throw new FileNotFoundException("File does not exist");
+  private JocketFile(Path path) throws IOException {
+    this.path = path;
+    this.created = false;
 
-    this.file = file;
-    this.io = new RandomAccessFile(file, "rw");
-
-    if (create) {
-      int size = capacity + PACKET_INFO + maxPackets * LEN_PACKET_INFO;
-      io.setLength(0);
-
-      // append data instead of just setting the size: in case we are using
-      // a real filesystem, this could avoid getting a fragmented file
-      // (or not)
-      for (int i = 0; i < size; i += 1024) {
-        io.write(new byte[1024]);
-      }
-      io.setLength(size);
+    try (FileChannel channel = FileChannel.open(path, READ, WRITE, LinkOption.NOFOLLOW_LINKS)) {
+      long size = channel.size();
+      if (size < PACKET_INFO || size > Integer.MAX_VALUE)
+        throw new IOException("Not an exchange file: " + path);
+      buf = map(channel, size);
     }
 
-    FileChannel channel = io.getChannel();
-    buf = channel.map(MapMode.READ_WRITE, 0, io.length());
+    maxPackets = buf.getInt(META_MAX_PACKETS);
+    int capacity = buf.getInt(META_CAPACITY);
+    if (Integer.bitCount(maxPackets) != 1 || Integer.bitCount(capacity) != 1
+        || fileSize(maxPackets, capacity) != buf.capacity()) {
+      MappedBuffers.unmap(buf);
+      throw new IOException("Not an exchange file: " + path);
+    }
+  }
+
+  /**
+   * Opens an exchange file whose path was received from the server during the
+   * handshake, provided it is one: a regular file of the exchange directory,
+   * named like the files servers create. Otherwise, any process listening on
+   * the port could make the client write into (and delete) any file it can
+   * access.
+   */
+  static JocketFile openReceived(String name) throws IOException {
+    Path path;
+    try {
+      path = Paths.get(name);
+    }
+    catch (InvalidPathException e) {
+      throw new IOException("Not an exchange file: " + name, e);
+    }
+    Path parent = path.getParent();
+    if (!path.isAbsolute() || parent == null
+        || !parent.toRealPath().equals(DIR.toRealPath())
+        || !path.getFileName().toString().startsWith(PREFIX)
+        || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+      throw new IOException("Not an exchange file: " + name);
+
+    // NB: opened without following symbolic links, in case the file has been
+    // replaced by one since checked
+    return new JocketFile(path);
+  }
+
+  private static MappedByteBuffer map(FileChannel channel, long size) throws IOException {
+    MappedByteBuffer buf = channel.map(MapMode.READ_WRITE, 0, size);
     buf.order(ByteOrder.nativeOrder());
     buf.load();
-    channel.close();
+    return buf;
+  }
 
-    if (create) {
-      buf.putInt(META_MAX_PACKETS, maxPackets);
-      buf.putInt(META_CAPACITY, capacity);
-      buf.force();
-    }
-    else {
-      maxPackets = buf.getInt(META_MAX_PACKETS);
-    }
+  private static long fileSize(int maxPackets, int capacity) {
+    return (long) capacity + PACKET_INFO + (long) maxPackets * LEN_PACKET_INFO;
+  }
 
-    this.maxPackets = maxPackets;
-
-    file.deleteOnExit();
+  private static Path directory() {
+    String dir = System.getProperty("jocket.dir");
+    if (dir != null)
+      return Paths.get(dir);
+    Path shm = Paths.get("/dev/shm");
+    return Files.isDirectory(shm) ? shm : Paths.get(System.getProperty("java.io.tmpdir"));
   }
 
   /**
@@ -144,37 +224,31 @@ public class JocketFile implements Const, Closeable {
   }
 
   private synchronized void release() {
-    if (--refs == 0)
+    if (--refs == 0) {
       MappedBuffers.unmap(buf);
+      if (created || deletePending)
+        deleteFile();
+    }
   }
 
   public String getPath() {
-    return file.getAbsolutePath();
+    return path.toAbsolutePath().toString();
   }
 
   /**
-   * Deletes the file to make it harder to sniff stream. Can be called (at
-   * least under linux) after both endpoints have opened the file.
+   * Deletes the file, which makes it harder to sniff the stream and frees its
+   * memory once unmapped. Can be called as soon as both endpoints have opened
+   * it. Where a mapped file cannot be deleted (Windows), it is deleted when
+   * unmapped.
    */
-  public void deleteFile() {
-    file.delete();
-  }
-
-  private static File createTempFile() throws IOException {
+  public synchronized void deleteFile() {
     try {
-      // under linux, try to use tmpfs
-      File dir = new File("/dev/shm");
-      if (dir.exists()) {
-        File file =
-          new File(dir, "jocket-" + new Random().nextInt(Integer.MAX_VALUE));
-        new FileOutputStream(file).close();
-        return file;
-      }
+      Files.deleteIfExists(path);
+      deletePending = false;
     }
-    catch (Exception ex) {
+    catch (IOException e) {
+      deletePending = true;
     }
-    System.err.println("Could not create file in /dev/shm");
-    return File.createTempFile("jocket", "");
   }
 
   /**

@@ -8,9 +8,10 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.SocketTimeoutException;
 
 import jocket.futex.Futex;
+import jocket.impl.JocketReader;
+import jocket.impl.JocketWriter;
 
 public class ServerJocket implements Closeable {
 
@@ -33,7 +34,7 @@ public class ServerJocket implements Closeable {
 
   private final int capacity;
 
-  private boolean closed;
+  private volatile boolean closed;
 
   /**
    * Creates a new Jocket server with default settings.
@@ -56,8 +57,7 @@ public class ServerJocket implements Closeable {
     this.capacity = capacity;
     srv = new ServerSocket();
 
-    // FIXME: getLoopackAddress() == @since 1.7
-    srv.bind(new InetSocketAddress(InetAddress.getByName(null), port));
+    srv.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
   }
 
   @Override
@@ -66,57 +66,89 @@ public class ServerJocket implements Closeable {
     srv.close();
   }
 
+  /**
+   * Waits for a client to connect and complete the handshake. Clients which do
+   * not complete it are ignored.
+   *
+   * @throws IOException if the server is closed, or cannot create exchange
+   *         files
+   */
   public JocketSocket accept() throws IOException {
     while (true) {
 
       if (closed)
         throw new IllegalStateException("Closed");
 
-      Socket s = srv.accept();
+      try (Socket s = srv.accept()) {
+        JocketSocket js = handshake(s);
+        if (js != null)
+          return js;
+      }
+    }
+  }
+
+  /**
+   * Sends the paths of new exchange files to the client, which opens them.
+   * Returns null if the client does not complete the handshake: it must not
+   * prevent other clients from connecting (e.g. a port scanner, or a client
+   * killed during the handshake).
+   *
+   * @throws IOException if exchange files cannot be created
+   */
+  private JocketSocket handshake(Socket s) throws IOException {
+    DataInputStream in;
+    DataOutputStream out;
+    try {
       // allows to wakeup if client never does the handshake
       s.setSoTimeout(1000);
-
-      DataInputStream in = new DataInputStream(s.getInputStream());
-      DataOutputStream out = new DataOutputStream(s.getOutputStream());
+      in = new DataInputStream(s.getInputStream());
+      out = new DataOutputStream(s.getOutputStream());
       out.writeInt(MAGIC);
       out.flush();
+      if (in.readInt() != MAGIC)
+        return null;
+    }
+    catch (IOException e) {
+      return null;
+    }
 
-      int magic = 0;
-      try {
-        magic = in.readInt();
-      }
-      catch (SocketTimeoutException timeout) {
-      }
+    // TODO: write parameters in file header (+ misc meta data)
+    JocketFile fw = new JocketFile(maxPackets, capacity);
+    JocketFile fr;
+    try {
+      fr = new JocketFile(maxPackets, capacity);
+    }
+    catch (IOException | RuntimeException e) {
+      fw.close();
+      throw e;
+    }
 
-      if (magic != MAGIC) {
-        s.close();
-        continue;
-      }
-
-      // TODO: make parameters configurable through ServerJocket
-      // TODO: write parameters in file header (+ misc meta data)
-      JocketFile fw = new JocketFile(maxPackets, capacity);
-      JocketFile fr = new JocketFile(maxPackets, capacity);
-
-      if (Futex.isAvailable()) {
-        fw.writer().useFutex();
-        fr.reader().useFutex();
-      }
-
+    try {
       out.writeUTF(fw.getPath());
       out.writeUTF(fr.getPath());
       out.flush();
 
+      // the client has opened both files
       in.readInt();
-      fw.deleteFile();
-      fr.deleteFile();
-      s.close();
 
-      JocketSocket js = new JocketSocket(fr.reader(), fw.writer());
-      // the mappings are released when the socket is closed
+      JocketReader reader = fr.reader();
+      JocketWriter writer = fw.writer();
+      if (Futex.isAvailable()) {
+        writer.useFutex();
+        reader.useFutex();
+      }
+      return new JocketSocket(reader, writer);
+    }
+    catch (IOException e) {
+      return null;
+    }
+    finally {
+      // the client has opened the files, or never will. The mappings are
+      // released (and the files deleted) when the socket is closed
+      fw.deleteFile();
       fw.close();
+      fr.deleteFile();
       fr.close();
-      return js;
     }
   }
 

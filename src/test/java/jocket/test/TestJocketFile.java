@@ -2,7 +2,12 @@ package jocket.test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.io.Closeable;
 import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Supplier;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 
@@ -11,6 +16,7 @@ import jocket.impl.JocketReader;
 import jocket.impl.JocketWriter;
 import jocket.net.JocketFile;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -18,13 +24,49 @@ import org.junit.jupiter.api.Test;
  */
 public class TestJocketFile {
 
+  private final List<JocketFile> files = new ArrayList<>();
+
+  /**
+   * Closes the files, and their reader and writer: a created file is deleted
+   * once unmapped.
+   */
+  @AfterEach
+  public void tearDown() {
+    for (JocketFile f : files) {
+      close(f::reader);
+      close(f::writer);
+      f.close();
+    }
+  }
+
+  private static void close(Supplier<? extends Closeable> role) {
+    try {
+      role.get().close();
+    }
+    catch (IllegalStateException | IOException e) {
+      // the file was closed before this role was obtained: nothing to close
+    }
+  }
+
+  private JocketFile create(int maxPackets, int capacity) throws IOException {
+    JocketFile f = new JocketFile(maxPackets, capacity);
+    files.add(f);
+    return f;
+  }
+
+  private JocketFile open(JocketFile created) throws IOException {
+    JocketFile f = new JocketFile(new File(created.getPath()));
+    files.add(f);
+    return f;
+  }
+
   /**
    * Reading again after the end of stream used to read the unmapped buffer.
    */
   @Test
   public void testReadAfterEndOfStream() throws Exception {
-    JocketFile srv = new JocketFile(16, 1024);
-    JocketFile cli = new JocketFile(new File(srv.getPath()));
+    JocketFile srv = create(16, 1024);
+    JocketFile cli = open(srv);
     srv.writer().close();
     assertEquals(-1, cli.reader().read(new byte[8]));
     assertEquals(-1, cli.reader().read(new byte[8]));
@@ -35,8 +77,8 @@ public class TestJocketFile {
    */
   @Test
   public void testWriteAfterPeerClosed() throws Exception {
-    JocketFile srv = new JocketFile(16, 1024);
-    JocketFile cli = new JocketFile(new File(srv.getPath()));
+    JocketFile srv = create(16, 1024);
+    JocketFile cli = open(srv);
     cli.reader().close();
     assertThrows(ClosedException.class, () -> srv.writer().write(new byte[1], 0, 1));
     assertThrows(ClosedException.class, () -> srv.writer().write(new byte[1], 0, 1));
@@ -48,7 +90,7 @@ public class TestJocketFile {
    */
   @Test
   public void testReaderAndWriterInTwoThreads() throws Exception {
-    JocketFile jf = new JocketFile(1024, 1 << 16);
+    JocketFile jf = create(1024, 1 << 16);
     int count = 1_000_000;
     Thread writer = new Thread(() -> writeInts(jf.writer(), count), "writer");
     writer.setDaemon(true);
@@ -70,8 +112,8 @@ public class TestJocketFile {
    */
   @Test
   public void testPacketsFlushedBeforeCloseAreRead() throws Exception {
-    JocketFile srv = new JocketFile(16, 1024);
-    JocketFile cli = new JocketFile(new File(srv.getPath()));
+    JocketFile srv = create(16, 1024);
+    JocketFile cli = open(srv);
     JocketWriter w = srv.writer();
     w.write("abc".getBytes(), 0, 3);
     w.flush();
@@ -92,8 +134,8 @@ public class TestJocketFile {
    */
   @Test
   public void testCloseWhileReading() throws Exception {
-    JocketFile srv = new JocketFile(16, 1024);
-    JocketFile cli = new JocketFile(new File(srv.getPath()));
+    JocketFile srv = create(16, 1024);
+    JocketFile cli = open(srv);
     srv.writer(); // keeps the writer open
     JocketReader r = cli.reader();
     cli.close(); // as JocketSocket does: closing the reader unmaps the buffer
@@ -115,8 +157,8 @@ public class TestJocketFile {
   @Test
   public void testCloseWhileDataFlows() throws Exception {
     for (int iter = 0; iter < 50; iter++) {
-      JocketFile srv = new JocketFile(64, 1 << 16);
-      JocketFile cli = new JocketFile(new File(srv.getPath()));
+      JocketFile srv = create(64, 1 << 16);
+      JocketFile cli = open(srv);
       JocketWriter w = srv.writer();
       JocketReader r = cli.reader();
       // as JocketSocket does: closing the reader (or writer) unmaps its buffer
