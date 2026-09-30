@@ -1,6 +1,7 @@
 # Jocket
 
 [![build](https://github.com/pcdv/jocket/actions/workflows/build.yml/badge.svg)](https://github.com/pcdv/jocket/actions/workflows/build.yml)
+[![JitPack](https://jitpack.io/v/pcdv/jocket.svg)](https://jitpack.io/#pcdv/jocket)
 
 Jocket is a low-latency replacement for local Java sockets, based on shared
 memory. Two processes on the same host exchange data through memory-mapped
