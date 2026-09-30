@@ -9,3 +9,4 @@ build
 .classpath
 .settings
 .vscode
+hs_err_pid*.log

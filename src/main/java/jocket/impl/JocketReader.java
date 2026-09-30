@@ -33,6 +33,8 @@ public class JocketReader extends AbstractJocketBuffer {
   }
 
   public int readBlocking(byte[] data, int off, int len) {
+    if (len == 0)
+      return 0;
     for (;;) {
       int read = read(data, off, len);
       if (read != 0) {
@@ -107,14 +109,11 @@ public class JocketReader extends AbstractJocketBuffer {
     final int packetSize = acc.getInt(pktInfo + 4);
     final int packetPos = dataOffset + (acc.getInt(pktInfo) & dataMask);
 
-    buf.position(packetPos);
-    buf.limit(packetPos + packetSize);
-
     // NB: I'm not sure calling slice is cheaper than the array-copy it avoids
     // (except for big packets). An alternative would be to directly return
     // the main buffer (more dangerous because it allows to bork the entire
     // exchange file). Surely a reusable/mutable slice would be better.
-    return currentPacket = buf.slice();
+    return currentPacket = buf.slice(packetPos, packetSize).order(buf.order());
   }
 
   /**
@@ -133,9 +132,10 @@ public class JocketReader extends AbstractJocketBuffer {
       acc.putInt(RSEQ, ++rseq);
     }
     else {
+      // same as a partial read()
       final int pktInfo = PACKET_INFO + (rseq & packetMask) * LEN_PACKET_INFO;
       acc.putInt(pktInfo + 4, packet.remaining());
-      acc.putInt(pktInfo, packet.position());
+      acc.putInt(pktInfo, acc.getInt(pktInfo) + packet.position());
     }
   }
 

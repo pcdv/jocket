@@ -4,6 +4,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.DataInputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
 
 import jocket.impl.ClosedException;
 
@@ -50,5 +53,22 @@ public class TestJocketSocket extends AbstractJocketSocketTest {
       c.getWriter().flush();
       new DataInputStream(s.getInputStream()).readFully(buf);
     }
+  }
+
+  /**
+   * A zero-copy send() used not to signal the futex, leaving the reader asleep.
+   */
+  @Test
+  public void testZeroCopySendWakesReader() throws Exception {
+    FutureTask<Integer> read = new FutureTask<>(() -> c.getInputStream().read(new byte[16]));
+    Thread reader = new Thread(read, "reader");
+    reader.setDaemon(true);
+    reader.start();
+    Thread.sleep(100); // lets the reader go to sleep
+
+    ByteBuffer b = s.getWriter().newPacket(4);
+    b.put("ping".getBytes());
+    s.getWriter().send(b);
+    assertEquals(4, read.get(5, TimeUnit.SECONDS));
   }
 }

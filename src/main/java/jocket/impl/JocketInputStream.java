@@ -2,6 +2,7 @@ package jocket.impl;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Objects;
 
 public class JocketInputStream extends InputStream {
 
@@ -23,6 +24,7 @@ public class JocketInputStream extends InputStream {
 
   @Override
   public int read(byte[] b, int off, int len) {
+    Objects.checkFromIndexSize(off, len, b.length);
     return reader.readBlocking(b, off, len);
   }
 

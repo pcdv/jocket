@@ -43,10 +43,10 @@ public class JocketWriter extends AbstractJocketBuffer {
   /**
    * Sets packet alignment.
    *
-   * @param align must be either 0 or a power of 2
+   * @param align must be either 0 or a power of 2, not above capacity
    */
   public void setAlign(int align) {
-    if (align < 0 || align > 0 && Integer.bitCount(align) != 1)
+    if (align < 0 || align > 0 && Integer.bitCount(align) != 1 || align > capacity)
       throw new IllegalArgumentException("Invalid alignment: " + align);
     this.align = align;
     this.alignMask = align == 0 ? 0 : align - 1;
@@ -120,12 +120,15 @@ public class JocketWriter extends AbstractJocketBuffer {
    * @return
    */
   public ByteBuffer newPacket(int size) {
+    // data written with write() goes in its own packet
+    flush();
+
     final int rseq = rseq();
     final int wseq = this.wseq;
 
     if (rseq == wseq) {
       // reset position in buffer when reader is up to date
-      if (rseq > 0 && !dirty) {
+      if (rseq > 0) {
         this.pstart = this.pend = 0;
       }
     }
@@ -139,20 +142,15 @@ public class JocketWriter extends AbstractJocketBuffer {
     if (isClosed())
       throw new ClosedException("Closed");
 
+    this.pstart = this.pend = align(pend);
+
     int av = getAvailableSpace(rseq);
     if (av < size)
       return null;
 
     int pkt = PACKET_INFO + (wseq & packetMask) * LEN_PACKET_INFO;
-
-    int mod = pend & alignMask;
-    this.pend += align - mod;
-    this.pstart = pend;
-
     acc.putInt(pkt, pend);
-    buf.position(dataOffset + pstart);
-    buf.limit(dataOffset + pstart + av);
-    return currentPacket = buf.slice();
+    return currentPacket = buf.slice(dataOffset + (pend & dataMask), av).order(buf.order());
   }
 
   /**
@@ -174,6 +172,8 @@ public class JocketWriter extends AbstractJocketBuffer {
     pstart = pend;
     writeMemoryBarrier();
     acc.putInt(WSEQ, ++wseq);
+    if (futex != null)
+      futex.signal(wseq);
   }
 
   public void flush() {
@@ -184,13 +184,19 @@ public class JocketWriter extends AbstractJocketBuffer {
       acc.putInt(pkt + 4, pend - pstart);
       acc.putInt(WSEQ, ++wseq);
 
-      this.pend += align - (pend & alignMask);
-      this.pstart = pend;
+      this.pstart = this.pend = align(pend);
 
       dirty = false;
       if (futex != null)
         futex.signal(wseq);
     }
+  }
+
+  /**
+   * Returns specified position, rounded up to the packet alignment.
+   */
+  private int align(int pos) {
+    return (pos + alignMask) & ~alignMask;
   }
 
   /**
@@ -224,23 +230,28 @@ public class JocketWriter extends AbstractJocketBuffer {
    * <p>
    * Result is (X - head) where X is the smallest of:
    * <ul>
-   * <li>head + capacity - (head - head % capacity)
+   * <li>head + capacity - head % capacity (the end of the buffer)
    * <li>tail + capacity
    * </ul>
+   * where head is the write position (pend) and tail is the start of the
+   * oldest packet not read yet: the one of the reader or, if the reader has
+   * read all flushed packets, the pending one.
    * <p>
    * This method works only if pend/pstart are reset to 0 when the reader has
    * read everything (otherwise 0 can be returned instead of capacity).
    *
    * @param rseq sequence number of reader
-   * @param head position of last written byte
    */
   private int getAvailableSpace(int rseq) {
-    return Math.min(start(rseq), pend - (pend & dataMask)) + capacity - pend;
+    // the slot of the pending packet holds a stale position until flush()
+    final int tail = rseq == wseq ? pstart : start(rseq);
+    // negative when alignment padding has moved pend past the tail
+    return Math.max(0, Math.min(tail, pend - (pend & dataMask)) + capacity - pend);
 
     // NB: this is the contracted form of:
     // -----------------------------------
     // int lim1 = pend + capacity - (pend & dataMask);
-    // int lim2 = start(rseq) + capacity;
+    // int lim2 = tail + capacity;
     // return Math.min(lim1, lim2) - pend;
   }
 
