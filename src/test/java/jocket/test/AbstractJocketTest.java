@@ -1,6 +1,6 @@
 package jocket.test;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.EOFException;
 import java.nio.ByteBuffer;
@@ -9,9 +9,7 @@ import jocket.impl.Const;
 import jocket.impl.JocketReader;
 import jocket.impl.JocketWriter;
 
-import org.junit.*;
 
-@Ignore
 public abstract class AbstractJocketTest {
 
   private final int readBufSize = 8192;

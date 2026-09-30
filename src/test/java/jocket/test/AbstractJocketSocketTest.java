@@ -5,15 +5,15 @@ import java.io.IOException;
 import jocket.net.JocketSocket;
 import jocket.net.ServerJocket;
 
-import org.junit.*;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 
-@Ignore
 public abstract class AbstractJocketSocketTest {
   protected JocketSocket c;
   protected volatile JocketSocket s;
   protected ServerJocket srv;
 
-  @Before
+  @BeforeEach
   public void setUp() throws Exception {
     srv = new ServerJocket(0);
     new Thread() {
@@ -31,7 +31,7 @@ public abstract class AbstractJocketSocketTest {
       Thread.sleep(1);
   }
 
-  @After
+  @AfterEach
   public void tearDown() throws Exception {
     srv.close();
   }

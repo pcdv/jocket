@@ -82,27 +82,25 @@ plot '/tmp/Jocket' using 1 with lines title 'Jocket', '/tmp/Socket' using 1 with
 How to build
 ------------
 
-Just run the following commands to build Jocket and run the benchmark.
+Jocket requires Java 21. Gradle uses a locally installed JDK 21, or downloads
+one if none is found.
 
-`$JAVA_HOME` must be set to a valid JDK directory otherwise the JNI
-build will fail.
+Just run the following commands to build Jocket and run the benchmark.
 
 ```
 git clone https://github.com/pcdv/jocket.git
 cd jocket
-./gradlew jni build testClasses
+./gradlew build
 ./run-bench.sh
 ./run-bench.sh -Dtcp=true
 ```
 
-You can run `ant` instead of `gradlew` if you have it installed (although I
-might remove ant support in the future).
-
 Notes:
- - the JNI build requires Linux for its futex implementation
- - the build should now work on macOS and on Windows as the JNI library is
- not generated but the lack of inter process synchronization will make it
- suboptimal
+ - under Linux, the build also compiles the JNI futex library, which
+ requires `gcc`
+ - the build also works on macOS and on Windows, where the JNI library is
+ not generated, but the lack of inter process synchronization makes Jocket
+ suboptimal there
 
 Using Jocket as a dependency
 ----------

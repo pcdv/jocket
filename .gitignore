@@ -1,9 +1,11 @@
-classes
 *.jar
+!gradle/wrapper/gradle-wrapper.jar
 .gradle
+.kotlin
 build
 .idea
 *.iml
 .project
 .classpath
 .settings
+.vscode

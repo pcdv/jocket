@@ -11,10 +11,10 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileChannel.MapMode;
 import java.util.Random;
 
+import jocket.futex.UnsafeUtil;
 import jocket.impl.Const;
 import jocket.impl.JocketReader;
 import jocket.impl.JocketWriter;
-import sun.nio.ch.DirectBuffer;
 
 /**
  * Creates or opens an exchange file wrapped in a mapped byte buffer and makes
@@ -130,9 +130,7 @@ public class JocketFile implements Const {
     return buf;
   }
 
-  public static void unmap(MappedByteBuffer buffer)
-  {
-    sun.misc.Cleaner cleaner = ((DirectBuffer) buffer).cleaner();
-    cleaner.clean();
+  public static void unmap(MappedByteBuffer buffer) {
+    UnsafeUtil.unsafe().invokeCleaner(buffer);
   }
 }

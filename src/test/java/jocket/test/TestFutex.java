@@ -1,6 +1,7 @@
 package jocket.test;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
 import java.nio.MappedByteBuffer;
@@ -11,9 +12,9 @@ import jocket.futex.Futex;
 import jocket.impl.Const;
 import jocket.net.JocketFile;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Misc low-level tests to validate the JNI futex implementation.
@@ -26,14 +27,15 @@ public class TestFutex implements Const {
 
   private MappedByteBuffer buf;
 
-  @Before
+  @BeforeEach
   public void setUp() throws IOException {
+    assumeTrue(Futex.isAvailable(), "JNI futex library not available");
     JocketFile jf = new JocketFile(16, 1024);
     buf = jf.getBuffer();
     futex = new Futex(jf.getBuffer(), FUTEX, RSEQ);
   }
 
-  @After
+  @AfterEach
   public void tearDown() {
 
   }
@@ -125,7 +127,7 @@ public class TestFutex implements Const {
    */
   private void checkAwake(final CountDownLatch latch)
       throws InterruptedException {
-    assertTrue("Still sleeping", latch.await(5, TimeUnit.MILLISECONDS));
+    assertTrue(latch.await(5, TimeUnit.MILLISECONDS), "Still sleeping");
   }
 
   /**
@@ -134,6 +136,6 @@ public class TestFutex implements Const {
    */
   private void checkWaiting(final CountDownLatch latch)
       throws InterruptedException {
-    assertFalse("Woke up too soon", latch.await(30, TimeUnit.MILLISECONDS));
+    assertFalse(latch.await(30, TimeUnit.MILLISECONDS), "Woke up too soon");
   }
 }

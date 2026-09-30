@@ -1,13 +1,13 @@
 package jocket.test;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.DataInputStream;
 import java.io.OutputStream;
 
 import jocket.impl.ClosedException;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class TestJocketSocket extends AbstractJocketSocketTest {
 
