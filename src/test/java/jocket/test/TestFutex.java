@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
-import java.nio.MappedByteBuffer;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -17,125 +16,73 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Misc low-level tests to validate the JNI futex implementation.
+ * Low-level tests of the JNI futex implementation.
  *
  * @author pcdv
  */
 public class TestFutex implements Const {
 
-  private Futex futex;
+  private static final long LONG_TIMEOUT = TimeUnit.SECONDS.toNanos(10);
 
-  private MappedByteBuffer buf;
+  private JocketFile jf;
+
+  private Futex futex;
 
   @BeforeEach
   public void setUp() throws IOException {
     assumeTrue(Futex.isAvailable(), "JNI futex library not available");
-    JocketFile jf = new JocketFile(16, 1024);
-    buf = jf.getBuffer();
-    futex = new Futex(jf.getBuffer(), FUTEX, RSEQ);
+    jf = new JocketFile(16, 1024);
+    futex = new Futex(jf.getBuffer(), FUTEX);
   }
 
   @AfterEach
   public void tearDown() {
-
-  }
-
-  private void checkValues(int futex, int rseq) {
-    assertEquals(futex, this.futex.getInt(FUTEX));
-    assertEquals(rseq, this.futex.getInt(RSEQ));
+    if (jf != null)
+      jf.close();
   }
 
   @Test
-  public void testAddressResolution() throws Exception {
-    futex.setInt(0, 42);
-    assertEquals(42, buf.getInt(0));
-    futex.setInt(8, 43);
-    assertEquals(43, buf.getInt(8));
-    futex.setInt(128, 42);
-    assertEquals(42, buf.getInt(128));
-    futex.setInt(136, 43);
-    assertEquals(43, buf.getInt(136));
-  }
-
-  @Test
-  public void testFutexAwait() throws Exception {
+  public void testSignalWakesWaiter() throws Exception {
     for (int i = 0; i < 10; i++) {
-      final CountDownLatch latch = futureAwait();
-      checkWaiting(latch);
-      futex.signal(-1);
-      checkAwake(latch);
+      CountDownLatch latch = startAwait(LONG_TIMEOUT);
+      assertFalse(latch.await(30, TimeUnit.MILLISECONDS), "Woke up too soon");
+      assertEquals(-1, jf.getBuffer().getInt(FUTEX));
+      futex.signal();
+      assertTrue(latch.await(1, TimeUnit.SECONDS), "Still sleeping");
+      assertEquals(0, jf.getBuffer().getInt(FUTEX));
     }
   }
 
   @Test
-  public void testFutexPause() throws Exception {
-    for (int i = 0; i < 10; i++) {
+  public void testPendingSignal() throws Exception {
+    futex.signal();
+    assertEquals(1, jf.getBuffer().getInt(FUTEX));
+    long t0 = System.nanoTime();
+    futex.await(LONG_TIMEOUT);
+    assertTrue(System.nanoTime() - t0 < TimeUnit.SECONDS.toNanos(1), "Waited despite the signal");
+    assertEquals(0, jf.getBuffer().getInt(FUTEX));
+  }
 
-      checkValues(0, i);
-      final CountDownLatch latch = futurePause(i);
-      Thread.sleep(10);
-
-      checkWaiting(latch);
-      checkValues(-1, i);
-
-      futex.signal(i);
-      checkWaiting(latch);
-      buf.putInt(RSEQ, i + 1);
-      futex.signal(i + 1);
-      checkAwake(latch);
-      assertEquals(0, buf.getInt(FUTEX));
-    }
+  @Test
+  public void testTimeout() throws Exception {
+    long t0 = System.nanoTime();
+    futex.await(TimeUnit.MILLISECONDS.toNanos(50));
+    long elapsed = System.nanoTime() - t0;
+    assertTrue(elapsed >= TimeUnit.MILLISECONDS.toNanos(40), "Returned too soon: " + elapsed);
+    assertEquals(0, jf.getBuffer().getInt(FUTEX));
   }
 
   /**
-   * Starts a new thread and make it call await(), then count down the latch.
+   * Starts a thread calling await(), which then counts down the latch.
    */
-  private CountDownLatch futureAwait() {
-    final CountDownLatch latch = new CountDownLatch(1);
-    Thread reader = new Thread() {
-      @SuppressWarnings("deprecation")
-      @Override
-      public void run() {
-        futex.await();
-        latch.countDown();
-      }
-    };
-    reader.start();
+  private CountDownLatch startAwait(long timeoutNanos) {
+    CountDownLatch latch = new CountDownLatch(1);
+    Thread waiter = new Thread(() -> {
+      futex.await(timeoutNanos);
+      latch.countDown();
+    }, "waiter");
+    waiter.setDaemon(true);
+    waiter.start();
     return latch;
-  }
-
-  /**
-   * Starts a new thread and make it call pauseWhile(seq), then count down the
-   * latch.
-   */
-  private CountDownLatch futurePause(final int seq) {
-    final CountDownLatch latch = new CountDownLatch(1);
-    Thread reader = new Thread() {
-      @Override
-      public void run() {
-        futex.pauseWhile(seq);
-        latch.countDown();
-      }
-    };
-    reader.start();
-    return latch;
-  }
-
-  /**
-   * Check that specified latch has been counted down, ie. the thread has
-   * finished waiting.
-   */
-  private void checkAwake(final CountDownLatch latch)
-      throws InterruptedException {
-    assertTrue(latch.await(5, TimeUnit.MILLISECONDS), "Still sleeping");
-  }
-
-  /**
-   * Check that specified latch has been counted down, ie. the thread has is
-   * still waiting to be woken up.
-   */
-  private void checkWaiting(final CountDownLatch latch)
-      throws InterruptedException {
-    assertFalse(latch.await(30, TimeUnit.MILLISECONDS), "Woke up too soon");
   }
 }

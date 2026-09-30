@@ -1,5 +1,6 @@
 package jocket.net;
 
+import java.io.Closeable;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -11,28 +12,41 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileChannel.MapMode;
 import java.util.Random;
 
-import jocket.futex.UnsafeUtil;
 import jocket.impl.Const;
 import jocket.impl.JocketReader;
 import jocket.impl.JocketWriter;
+import jocket.impl.MappedBuffers;
 
 /**
  * Creates or opens an exchange file wrapped in a mapped byte buffer and makes
  * it easy to obtain a JocketReader or JocketWriter instance.
+ * <p>
+ * The reader and the writer share the mapping, which is unmapped once this
+ * JocketFile, and the reader and writer obtained from it, are all closed.
  *
  * @author pcdv
  */
-public class JocketFile implements Const {
+public class JocketFile implements Const, Closeable {
 
   private final MappedByteBuffer buf;
 
   private final RandomAccessFile io;
 
-  private final JocketReader reader;
-
-  private final JocketWriter writer;
+  private final int maxPackets;
 
   private final File file;
+
+  private JocketReader reader;
+
+  private JocketWriter writer;
+
+  /**
+   * Number of users of the mapping: this JocketFile until closed, and its
+   * reader and writer until closed.
+   */
+  private int refs = 1;
+
+  private boolean closed;
 
   /**
    * Creates a new exchange file and associated reader and writer.
@@ -83,18 +97,55 @@ public class JocketFile implements Const {
       maxPackets = buf.getInt(META_MAX_PACKETS);
     }
 
-    reader = new JocketReader(buf, maxPackets);
-    writer = new JocketWriter(buf, maxPackets);
+    this.maxPackets = maxPackets;
 
     file.deleteOnExit();
   }
 
-  public JocketReader reader() {
+  /**
+   * Returns the reader of this file, created on first call.
+   */
+  public synchronized JocketReader reader() {
+    if (reader == null) {
+      checkOpen();
+      refs++;
+      reader = new JocketReader(buf, maxPackets, this::release);
+    }
     return reader;
   }
 
-  public JocketWriter writer() {
+  /**
+   * Returns the writer of this file, created on first call.
+   */
+  public synchronized JocketWriter writer() {
+    if (writer == null) {
+      checkOpen();
+      refs++;
+      writer = new JocketWriter(buf, maxPackets, this::release);
+    }
     return writer;
+  }
+
+  private void checkOpen() {
+    if (closed)
+      throw new IllegalStateException("Closed");
+  }
+
+  /**
+   * Releases this JocketFile's hold on the mapping. The reader and writer
+   * already obtained remain usable until they are closed.
+   */
+  @Override
+  public synchronized void close() {
+    if (!closed) {
+      closed = true;
+      release();
+    }
+  }
+
+  private synchronized void release() {
+    if (--refs == 0)
+      MappedBuffers.unmap(buf);
   }
 
   public String getPath() {
@@ -126,11 +177,10 @@ public class JocketFile implements Const {
     return File.createTempFile("jocket", "");
   }
 
+  /**
+   * For test purposes. Must not be accessed once the mapping is released.
+   */
   public MappedByteBuffer getBuffer() {
     return buf;
-  }
-
-  public static void unmap(MappedByteBuffer buffer) {
-    UnsafeUtil.unsafe().invokeCleaner(buffer);
   }
 }

@@ -20,7 +20,12 @@ public class ServerJocket implements Closeable {
   private static final int DEFAULT_CAPACITY = Integer
       .getInteger("jocket.capacity", 4 * 1024 * 1024);
 
-  static final int MAGIC = 0x50C4E7;
+  /**
+   * Exchanged during the handshake. Changed whenever the layout or the
+   * protocol of exchange files changes, so that incompatible versions do not
+   * connect.
+   */
+  static final int MAGIC = 0x50C4E8;
 
   private final ServerSocket srv;
 
@@ -107,7 +112,11 @@ public class ServerJocket implements Closeable {
       fr.deleteFile();
       s.close();
 
-      return new JocketSocket(fr.reader(), fw.writer());
+      JocketSocket js = new JocketSocket(fr.reader(), fw.writer());
+      // the mappings are released when the socket is closed
+      fw.close();
+      fr.close();
+      return js;
     }
   }
 

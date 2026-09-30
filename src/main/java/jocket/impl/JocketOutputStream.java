@@ -31,7 +31,7 @@ public class JocketOutputStream extends OutputStream {
       len -= written;
       off += written;
       if (written == 0)
-        wait.pauseWhile(0);
+        wait.pause();
     }
     wait.reset();
   }
@@ -41,8 +41,13 @@ public class JocketOutputStream extends OutputStream {
     writer.flush();
   }
 
+  /**
+   * Flushes pending data, then closes the writer.
+   */
   @Override
   public void close() {
+    if (!writer.isClosed())
+      writer.flush();
     writer.close();
   }
 }

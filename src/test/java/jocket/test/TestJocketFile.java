@@ -3,13 +3,14 @@ package jocket.test;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.File;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
 
 import jocket.impl.ClosedException;
 import jocket.impl.JocketReader;
 import jocket.impl.JocketWriter;
 import jocket.net.JocketFile;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -21,7 +22,6 @@ public class TestJocketFile {
    * Reading again after the end of stream used to read the unmapped buffer.
    */
   @Test
-  @Disabled("crashes the JVM: read() accesses the buffer after unmapping it")
   public void testReadAfterEndOfStream() throws Exception {
     JocketFile srv = new JocketFile(16, 1024);
     JocketFile cli = new JocketFile(new File(srv.getPath()));
@@ -34,7 +34,6 @@ public class TestJocketFile {
    * Writing again after the peer has closed used to read the unmapped buffer.
    */
   @Test
-  @Disabled("crashes the JVM: write() accesses the buffer after unmapping it")
   public void testWriteAfterPeerClosed() throws Exception {
     JocketFile srv = new JocketFile(16, 1024);
     JocketFile cli = new JocketFile(new File(srv.getPath()));
@@ -48,7 +47,6 @@ public class TestJocketFile {
    * process, used to share the position of a same ByteBuffer.
    */
   @Test
-  @Disabled("the reader and the writer share the position of the same ByteBuffer")
   public void testReaderAndWriterInTwoThreads() throws Exception {
     JocketFile jf = new JocketFile(1024, 1 << 16);
     int count = 1_000_000;
@@ -63,6 +61,99 @@ public class TestJocketFile {
       while (len < 4)
         len += r.read(b, len, 4 - len);
       assertEquals(i, toInt(b), "message " + i);
+    }
+  }
+
+  /**
+   * The writer used to announce its closing by overwriting its sequence
+   * number: the packets the reader had not seen yet were lost.
+   */
+  @Test
+  public void testPacketsFlushedBeforeCloseAreRead() throws Exception {
+    JocketFile srv = new JocketFile(16, 1024);
+    JocketFile cli = new JocketFile(new File(srv.getPath()));
+    JocketWriter w = srv.writer();
+    w.write("abc".getBytes(), 0, 3);
+    w.flush();
+    w.write("def".getBytes(), 0, 3);
+    w.flush();
+    w.close();
+
+    byte[] b = new byte[8];
+    JocketReader r = cli.reader();
+    assertEquals(3, r.read(b));
+    assertEquals(3, r.read(b));
+    assertEquals(-1, r.read(b));
+  }
+
+  /**
+   * close() called while another thread is reading used to unmap the buffer
+   * under that thread's feet.
+   */
+  @Test
+  public void testCloseWhileReading() throws Exception {
+    JocketFile srv = new JocketFile(16, 1024);
+    JocketFile cli = new JocketFile(new File(srv.getPath()));
+    srv.writer(); // keeps the writer open
+    JocketReader r = cli.reader();
+    cli.close(); // as JocketSocket does: closing the reader unmaps the buffer
+
+    FutureTask<Integer> read = new FutureTask<>(() -> r.readBlocking(new byte[8], 0, 8));
+    Thread reader = new Thread(read, "reader");
+    reader.setDaemon(true);
+    reader.start();
+    Thread.sleep(100); // lets the reader wait for data
+
+    r.close();
+    assertEquals(-1, read.get(5, TimeUnit.SECONDS));
+  }
+
+  /**
+   * Same as above, while data flows: the reader is then most of the time
+   * copying data, which crashes the JVM if the buffer is unmapped meanwhile.
+   */
+  @Test
+  public void testCloseWhileDataFlows() throws Exception {
+    for (int iter = 0; iter < 50; iter++) {
+      JocketFile srv = new JocketFile(64, 1 << 16);
+      JocketFile cli = new JocketFile(new File(srv.getPath()));
+      JocketWriter w = srv.writer();
+      JocketReader r = cli.reader();
+      // as JocketSocket does: closing the reader (or writer) unmaps its buffer
+      srv.close();
+      cli.close();
+
+      Thread writer = new Thread(() -> {
+        byte[] b = new byte[1000];
+        try {
+          while (true) {
+            w.write(b, 0, b.length);
+            w.flush();
+          }
+        }
+        catch (ClosedException e) {
+          // the reader is closed
+        }
+      }, "writer");
+      writer.setDaemon(true);
+      writer.start();
+
+      FutureTask<Integer> read = new FutureTask<>(() -> {
+        byte[] b = new byte[1000];
+        while (r.read(b) >= 0)
+          ;
+        return -1;
+      });
+      Thread reader = new Thread(read, "reader");
+      reader.setDaemon(true);
+      reader.start();
+
+      Thread.sleep(10);
+      r.close();
+      assertEquals(-1, read.get(5, TimeUnit.SECONDS));
+      writer.join(5000);
+      assertFalse(writer.isAlive(), "writer still running");
+      w.close();
     }
   }
 

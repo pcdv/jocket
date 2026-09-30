@@ -13,7 +13,7 @@ public class BusyYieldSleep implements WaitStrategy {
   private int counter;
 
   @Override
-  public void pauseWhile(int seq) {
+  public void pause() {
     int counter = this.counter++;
     if (counter < SPIN)
       return;

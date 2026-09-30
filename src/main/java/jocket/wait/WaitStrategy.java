@@ -10,9 +10,8 @@ public interface WaitStrategy {
 
   /**
    * Pauses for some time.
-   * @param seq TODO
    */
-  void pauseWhile(int seq);
+  void pause();
 
   /**
    * Resets the strategy. Called when data has been read or written

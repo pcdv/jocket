@@ -9,6 +9,7 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 
 import jocket.impl.ClosedException;
+import jocket.net.JocketSocket;
 
 import org.junit.jupiter.api.Test;
 
@@ -70,5 +71,40 @@ public class TestJocketSocket extends AbstractJocketSocketTest {
     b.put("ping".getBytes());
     s.getWriter().send(b);
     assertEquals(4, read.get(5, TimeUnit.SECONDS));
+  }
+
+  /**
+   * Closing a socket must wake up a thread blocked reading it (on the futex
+   * under Linux).
+   */
+  @Test
+  public void testCloseWakesBlockedReader() throws Exception {
+    FutureTask<Integer> read = startRead(c);
+    c.close();
+    assertEquals(-1, read.get(5, TimeUnit.SECONDS));
+  }
+
+  /**
+   * Closing a socket must wake up the peer blocked reading it (on the futex
+   * under Linux).
+   */
+  @Test
+  public void testPeerCloseWakesBlockedReader() throws Exception {
+    FutureTask<Integer> read = startRead(c);
+    s.close();
+    assertEquals(-1, read.get(5, TimeUnit.SECONDS));
+  }
+
+  /**
+   * Starts a thread reading specified socket, and gives it time to go to
+   * sleep.
+   */
+  private static FutureTask<Integer> startRead(JocketSocket sock) throws InterruptedException {
+    FutureTask<Integer> read = new FutureTask<>(() -> sock.getInputStream().read(new byte[16]));
+    Thread reader = new Thread(read, "reader");
+    reader.setDaemon(true);
+    reader.start();
+    Thread.sleep(100);
+    return read;
   }
 }

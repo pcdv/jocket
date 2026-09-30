@@ -2,7 +2,8 @@ package jocket.test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import org.junit.jupiter.api.Disabled;
+import jocket.impl.Const;
+
 import org.junit.jupiter.api.Test;
 
 public class TestJocket extends AbstractJocketTest {
@@ -177,8 +178,6 @@ public class TestJocket extends AbstractJocketTest {
   @Deprecated
   public void testAutoReset() throws Exception {
     init(128, 8);
-    r.setResetSeqNum(0);
-    w.setResetSeqNum(0);
 
     // write and read data
     write("ABC");
@@ -196,8 +195,6 @@ public class TestJocket extends AbstractJocketTest {
   @Deprecated
   public void testAutoReset2() throws Exception {
     init(128, 8);
-    r.setResetSeqNum(0);
-    w.setResetSeqNum(0);
 
     // write and read data
     write("ABC");
@@ -279,11 +276,10 @@ public class TestJocket extends AbstractJocketTest {
   }
 
   /**
-   * Sequence numbers used to become negative after 2^31 packets, which the
-   * reader took for the writer closing the socket.
+   * Sequence numbers used to be ints, which became negative after 2^31
+   * packets: the reader took it for the writer closing the socket.
    */
   @Test
-  @Disabled("sequence numbers overflow after 2^31 packets")
   public void testSequenceNumberOverflow() throws Exception {
     init(4, 128);
     setSeqNums(Integer.MAX_VALUE - 2);
@@ -292,5 +288,43 @@ public class TestJocket extends AbstractJocketTest {
       read("x" + i);
     }
     assertFalse(r.isClosed());
+  }
+
+  /**
+   * Positions in the buffer used to be ints, which overflowed after 2GB written
+   * without the reader ever catching up: the writer then overwrote unread
+   * data, once the write position had overflowed and the reader's had not.
+   */
+  @Test
+  public void testPositionOverflow() throws Exception {
+    init(64, 64);
+    byte[] chunk = new byte[24];
+    byte next = 0; // next byte written
+    byte expected = 0; // next byte read
+
+    // one packet at position 0, then positions are moved close to the
+    // overflow, keeping that packet at the reader's position (modulo capacity)
+    for (int i = 0; i < chunk.length; i++)
+      chunk[i] = next++;
+    assertEquals(24, w.write(chunk, 0, 24));
+    flush();
+    long pos = (Integer.MAX_VALUE & ~63) - 256 + 24;
+    setField(w, "pstart", pos);
+    setField(w, "pend", pos);
+    shared.putLong(Const.PACKET_INFO, pos - 24);
+
+    // the writer writes more than the reader reads: the reader never catches
+    // up, so positions are never reset
+    byte[] rbuf = new byte[20];
+    for (int iter = 0; iter < 200; iter++) {
+      for (int i = 0; i < chunk.length; i++)
+        chunk[i] = (byte) (next + i);
+      next += (byte) w.write(chunk, 0, chunk.length);
+      flush();
+
+      int len = r.read(rbuf, 0, rbuf.length);
+      for (int i = 0; i < len; i++)
+        assertEquals(expected++, rbuf[i], "iteration " + iter);
+    }
   }
 }

@@ -1,7 +1,6 @@
 package jocket.impl;
 
 import java.nio.ByteBuffer;
-import java.nio.MappedByteBuffer;
 
 import jocket.futex.Futex;
 import jocket.wait.BusyYieldSleep;
@@ -9,11 +8,24 @@ import jocket.wait.WaitStrategy;
 
 public class JocketReader extends AbstractJocketBuffer {
 
-  private int rseq;
+  /**
+   * Number of checks for new data before sleeping on the futex.
+   */
+  private static final int SPIN = 1024;
 
-  private int wseq;
+  /**
+   * Maximum time spent sleeping on the futex before checking again, in case
+   * nobody signals it.
+   */
+  private static final long FUTEX_TIMEOUT = 100_000_000;
+
+  private long rseq;
+
+  private long wseq;
 
   private WaitStrategy waiter = new BusyYieldSleep();
+
+  private Futex futex;
 
   private ByteBuffer currentPacket;
 
@@ -21,99 +33,167 @@ public class JocketReader extends AbstractJocketBuffer {
     super(buf, npackets);
   }
 
+  public JocketReader(ByteBuffer buf, int npackets, Runnable release) {
+    super(buf, npackets, release);
+  }
+
   @Override
   protected void close0() {
-    writeMemoryBarrier(); // not sure if really necessary
-    acc.putInt(RSEQ, -1);
-    acc.unmap();
+    setIntRelease(RCLOSED, 1);
+    // wakes up the thread reading, if it waits on the futex
+    if (futex != null)
+      futex.signal();
   }
 
   public int read(byte[] data) {
     return read(data, 0, data.length);
   }
 
+  /**
+   * Reads data if available. Returns the number of bytes read (possibly 0), or
+   * -1 if closed.
+   */
+  public int read(byte[] data, int off, int len) {
+    if (!enter())
+      return -1;
+    int res;
+    try {
+      res = read0(data, off, len);
+    }
+    finally {
+      exit();
+    }
+    if (res < 0)
+      close();
+    return res;
+  }
+
+  /**
+   * Waits until data is available and reads it. Returns the number of bytes
+   * read, or -1 if closed.
+   */
   public int readBlocking(byte[] data, int off, int len) {
     if (len == 0)
       return 0;
-    for (;;) {
-      int read = read(data, off, len);
-      if (read != 0) {
-        return read;
-      }
-      else {
-        waiter.pauseWhile(wseq);
-      }
+    if (!enter())
+      return -1;
+    int res;
+    try {
+      while ((res = read0(data, off, len)) == 0 && !isClosed())
+        pause();
     }
+    finally {
+      exit();
+    }
+    if (res > 0)
+      waiter.reset();
+    else {
+      res = -1; // closed by another thread
+      close();
+    }
+    return res;
   }
 
-  public int read(byte[] data, int off, int len) {
-    if (wseq <= rseq) {
-      readWseq();
+  /**
+   * Returns the number of bytes read, 0 if no data is available, -1 if the
+   * writer is closed and all its data has been read.
+   */
+  private int read0(byte[] data, int off, int len) {
+    if (!hasPacket())
+      return writerClosed() ? -1 : 0;
 
-      if (wseq <= rseq) {
-        if (wseq < 0)
-          close();
-
-        if (isClosed())
-          return -1;
-        return 0;
-      }
-    }
-
-    final int pktInfo = PACKET_INFO + (rseq & packetMask) * LEN_PACKET_INFO;
-    final int available = acc.getInt(pktInfo + 4);
-
-    buf.position(dataOffset + (acc.getInt(pktInfo) & dataMask));
+    final int pktInfo = packetInfo(rseq);
+    final long start = getLong(pktInfo);
+    final int available = getInt(pktInfo + 8);
+    final int pos = dataPos(start);
 
     // if the whole packet can be read
     if (available <= len) {
-      buf.get(data, off, available);
-      acc.putInt(RSEQ, ++rseq);
-      len = available;
+      buf.get(pos, data, off, available);
+      setLongRelease(RSEQ, ++rseq);
+      return available;
     }
 
     // if the packet can be read only partially
-    else {
-      // read data
-      buf.get(data, off, len);
-
-      // update packet info to make space available for writer (the order of
-      // the 2 writes should not be important as the writer does not look at
-      // packet length)
-      acc.putInt(pktInfo + 4, available - len);
-      acc.putInt(pktInfo, acc.getInt(pktInfo) + len);
-    }
-
+    buf.get(pos, data, off, len);
+    // the writer looks at the start of the packet, to compute its free space
+    setInt(pktInfo + 8, available - len);
+    setLongRelease(pktInfo, start + len);
     return len;
+  }
+
+  /**
+   * Returns true if a packet can be read. Reads the writer's sequence number
+   * only when all known packets have been read.
+   */
+  private boolean hasPacket() {
+    if (wseq > rseq)
+      return true;
+    wseq = getLongAcquire(WSEQ);
+    return wseq > rseq;
+  }
+
+  /**
+   * Returns true if the writer is closed and all its packets have been read.
+   */
+  private boolean writerClosed() {
+    // the writer sets its flag after publishing its last packet: once the
+    // flag is seen, wseq has its final value
+    return getIntAcquire(WCLOSED) != 0 && !hasPacket();
+  }
+
+  private void pause() {
+    if (futex == null) {
+      waiter.pause();
+      return;
+    }
+    for (int i = 0; i < SPIN; i++) {
+      if (getLongAcquire(WSEQ) != wseq || getIntAcquire(WCLOSED) != 0 || isClosed())
+        return;
+      Thread.onSpinWait();
+    }
+    futex.await(FUTEX_TIMEOUT);
   }
 
   /**
    * EXPERIMENTAL (part of the zero-copy API). If a packet is available, return
    * a ByteBuffer wrapping the packet. The ByteBuffer should not be modified as
-   * it points directly into the exchange file (when using a MappedByteBuffer).
-   * After use, {@link #release(ByteBuffer)} MUST be called in order to notify
-   * the writer that the read area has become available for writing.
+   * it points directly into the exchange file (when using a MappedByteBuffer),
+   * and must not be used after close(). After use, {@link #release(ByteBuffer)}
+   * MUST be called in order to notify the writer that the read area has become
+   * available for writing.
+   *
+   * @throws ClosedException if closed
    */
   public ByteBuffer nextPacket() {
-    if (wseq <= rseq) {
-      readWseq();
+    if (!enter())
+      throw new ClosedException("Closed");
+    ByteBuffer packet = null;
+    boolean closedByWriter = false;
+    try {
+      if (hasPacket()) {
+        final int pktInfo = packetInfo(rseq);
+        final int packetSize = getInt(pktInfo + 8);
+        final int packetPos = dataPos(getLong(pktInfo));
 
-      if (wseq <= rseq) {
-        if (wseq < 0)
-          throw new ClosedException("Socket closed");
-        return null;
+        // NB: I'm not sure calling slice is cheaper than the array-copy it
+        // avoids (except for big packets). An alternative would be to directly
+        // return the main buffer (more dangerous because it allows to bork the
+        // entire exchange file). Surely a reusable/mutable slice would be
+        // better.
+        packet = currentPacket = buf.slice(packetPos, packetSize).order(buf.order());
       }
+      else
+        closedByWriter = writerClosed();
     }
-
-    final int pktInfo = PACKET_INFO + (rseq & packetMask) * LEN_PACKET_INFO;
-    final int packetSize = acc.getInt(pktInfo + 4);
-    final int packetPos = dataOffset + (acc.getInt(pktInfo) & dataMask);
-
-    // NB: I'm not sure calling slice is cheaper than the array-copy it avoids
-    // (except for big packets). An alternative would be to directly return
-    // the main buffer (more dangerous because it allows to bork the entire
-    // exchange file). Surely a reusable/mutable slice would be better.
-    return currentPacket = buf.slice(packetPos, packetSize).order(buf.order());
+    finally {
+      exit();
+    }
+    if (closedByWriter) {
+      close();
+      throw new ClosedException("Closed by writer");
+    }
+    return packet;
   }
 
   /**
@@ -128,41 +208,51 @@ public class JocketReader extends AbstractJocketBuffer {
 
     currentPacket = null;
 
-    if (packet.remaining() == 0) {
-      acc.putInt(RSEQ, ++rseq);
+    if (!enter())
+      return;
+    try {
+      if (packet.remaining() == 0) {
+        setLongRelease(RSEQ, ++rseq);
+      }
+      else {
+        // same as a partial read()
+        final int pktInfo = packetInfo(rseq);
+        setInt(pktInfo + 8, packet.remaining());
+        setLongRelease(pktInfo, getLong(pktInfo) + packet.position());
+      }
     }
-    else {
-      // same as a partial read()
-      final int pktInfo = PACKET_INFO + (rseq & packetMask) * LEN_PACKET_INFO;
-      acc.putInt(pktInfo + 4, packet.remaining());
-      acc.putInt(pktInfo, acc.getInt(pktInfo) + packet.position());
+    finally {
+      exit();
     }
   }
 
-  private void readWseq() {
-    wseq = acc.getInt(WSEQ);
-  }
-
+  /**
+   * Returns how many bytes can be read (mainly for test purposes).
+   */
   public int available() {
-    int wseq = acc.getInt(WSEQ);
-    if (wseq <= rseq)
+    if (!enter())
       return 0;
+    try {
+      long wseq = getLongAcquire(WSEQ);
+      if (wseq <= rseq)
+        return 0;
 
-    int windex = (wseq - 1) & packetMask; // last packet written
-    int rindex = rseq & packetMask; // first packet written
-
-    int start = acc.getInt(PACKET_INFO + rindex * LEN_PACKET_INFO);
-    int end = acc.getInt(PACKET_INFO + windex * LEN_PACKET_INFO)
-              + acc.getInt(PACKET_INFO + windex * LEN_PACKET_INFO + 4);
-
-    if (start <= end)
-      return end - start;
-    else
-      return capacity - (start - end);
+      int last = packetInfo(wseq - 1); // last packet written
+      long start = getLong(packetInfo(rseq)); // first packet not read
+      long end = getLong(last) + getInt(last + 8);
+      return (int) (end - start);
+    }
+    finally {
+      exit();
+    }
   }
 
+  /**
+   * Waits for data on the futex written by a writer which has called
+   * {@link JocketWriter#useFutex()}. The buffer must be a direct one.
+   */
   public void useFutex() {
-    this.waiter = new Futex((MappedByteBuffer) buf, FUTEX, WSEQ);
+    this.futex = new Futex(buf, FUTEX);
   }
 
   public WaitStrategy getWaitStrategy() {

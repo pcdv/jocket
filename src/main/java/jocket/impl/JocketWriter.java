@@ -1,17 +1,16 @@
 package jocket.impl;
 
 import java.nio.ByteBuffer;
-import java.nio.MappedByteBuffer;
 
 import jocket.futex.Futex;
 
 public class JocketWriter extends AbstractJocketBuffer {
 
   /** The sequence number of the next packet to write. */
-  private int wseq;
+  private long wseq;
 
   /** Pending packet's absolute start and end positions. */
-  private int pstart, pend;
+  private long pstart, pend;
 
   /**
    * Equivalent to (pend > pstart) but looks like it is faster to store this
@@ -40,6 +39,10 @@ public class JocketWriter extends AbstractJocketBuffer {
     super(buf, npackets);
   }
 
+  public JocketWriter(ByteBuffer buf, int npackets, Runnable release) {
+    super(buf, npackets, release);
+  }
+
   /**
    * Sets packet alignment.
    *
@@ -62,48 +65,70 @@ public class JocketWriter extends AbstractJocketBuffer {
    * @return the number of bytes written
    * @throws ClosedException if the socket is closed
    */
-  public int write(final byte[] data, final int off, int len) {
-    final int rseq = rseq();
-
-    if (rseq == wseq) {
-      // reset position in buffer when reader is up to date
-      if (rseq > 0 && !dirty) {
-        this.pstart = this.pend = 0;
-      }
-    }
-
-    else if (rseq < 0)
-      close();
-
-    // cannot write if all packets are written and the reader didn't read them
-    else if (wseq - rseq >= npackets)
-      return 0;
-
-    if (closed)
+  public int write(final byte[] data, final int off, final int len) {
+    if (!enter())
       throw new ClosedException("Closed");
+    int res;
+    try {
+      res = write0(data, off, len);
+    }
+    finally {
+      exit();
+    }
+    if (res < 0) {
+      close();
+      throw new ClosedException("Closed by reader");
+    }
+    return res;
+  }
+
+  /**
+   * Returns the number of bytes written, or -1 if the reader is closed.
+   */
+  private int write0(byte[] data, int off, int len) {
+    if (getIntAcquire(RCLOSED) != 0)
+      return -1;
+
+    final long rseq = getLongAcquire(RSEQ);
+    if (!canWrite(rseq))
+      return 0;
 
     // TODO: implement anti-truncation mechanism (write at 0 if remaining
     // space is too small)
     len = Math.min(getAvailableSpace(rseq), len);
     if (len > 0) {
       dirty = true;
-      buf.position(dataOffset + (pend & dataMask));
-      buf.put(data, off, len);
+      buf.put(dataPos(pend), data, off, len);
       this.pend += len;
 
       // flush when reaching end of buffer, otherwise next write will
       // generate an inconsistent packet (overflowing the buffer)
       if ((this.pend & dataMask) == 0) {
-        flush();
+        flush0();
       }
     }
     return len;
   }
 
   /**
+   * Returns false if no packet can be written until the reader reads one.
+   */
+  private boolean canWrite(long rseq) {
+    if (rseq == wseq) {
+      // reset position in buffer when reader is up to date
+      if (!dirty)
+        this.pstart = this.pend = 0;
+      return true;
+    }
+    // cannot write if all packets are written and the reader didn't read them
+    return wseq - rseq < npackets;
+  }
+
+  /**
    * EXPERIMENTAL. Returns a view on a segment of shared data so that the user
    * can directly write into it. This allows to avoid the array copy that would
-   * take place if {@link #write(byte[], int, int)} was called.
+   * take place if {@link #write(byte[], int, int)} was called. The view must
+   * not be used after close().
    * <p>
    * Example usage:
    *
@@ -116,41 +141,47 @@ public class JocketWriter extends AbstractJocketBuffer {
    * w.send(b);
    * </pre>
    *
-   * @param size
-   * @return
+   * @param size the minimum size of the packet
+   * @return a buffer of at least the requested size, or null if there is not
+   *         enough space
+   * @throws ClosedException if the socket is closed
    */
   public ByteBuffer newPacket(int size) {
-    // data written with write() goes in its own packet
-    flush();
+    if (!enter())
+      throw new ClosedException("Closed");
+    ByteBuffer packet = null;
+    boolean closedByReader = false;
+    try {
+      // data written with write() goes in its own packet
+      flush0();
 
-    final int rseq = rseq();
-    final int wseq = this.wseq;
-
-    if (rseq == wseq) {
-      // reset position in buffer when reader is up to date
-      if (rseq > 0) {
-        this.pstart = this.pend = 0;
+      if (getIntAcquire(RCLOSED) != 0)
+        closedByReader = true;
+      else {
+        final long rseq = getLongAcquire(RSEQ);
+        if (canWrite(rseq))
+          packet = newPacket0(rseq, size);
       }
     }
-    else if (rseq < 0)
+    finally {
+      exit();
+    }
+    if (closedByReader) {
       close();
+      throw new ClosedException("Closed by reader");
+    }
+    return packet;
+  }
 
-    // cannot write if all packets are written and the reader didn't read them
-    else if (wseq - rseq >= npackets)
-      return null;
-
-    if (isClosed())
-      throw new ClosedException("Closed");
-
+  private ByteBuffer newPacket0(long rseq, int size) {
     this.pstart = this.pend = align(pend);
 
     int av = getAvailableSpace(rseq);
     if (av < size)
       return null;
 
-    int pkt = PACKET_INFO + (wseq & packetMask) * LEN_PACKET_INFO;
-    acc.putInt(pkt, pend);
-    return currentPacket = buf.slice(dataOffset + (pend & dataMask), av).order(buf.order());
+    setLong(packetInfo(wseq), pend);
+    return currentPacket = buf.slice(dataPos(pend), av).order(buf.order());
   }
 
   /**
@@ -158,6 +189,7 @@ public class JocketWriter extends AbstractJocketBuffer {
    * {@link #newPacket(int)}.
    *
    * @param packet
+   * @throws ClosedException if the socket is closed
    */
   public void send(ByteBuffer packet) {
     if (packet == null || packet != currentPacket)
@@ -165,37 +197,65 @@ public class JocketWriter extends AbstractJocketBuffer {
 
     currentPacket = null;
 
-    int pkt = PACKET_INFO + (wseq & packetMask) * LEN_PACKET_INFO;
-    int size = packet.position();
-    acc.putInt(pkt + 4, size);
-    pend += size;
-    pstart = pend;
-    writeMemoryBarrier();
-    acc.putInt(WSEQ, ++wseq);
-    if (futex != null)
-      futex.signal(wseq);
+    if (!enter())
+      throw new ClosedException("Closed");
+    try {
+      int size = packet.position();
+      setInt(packetInfo(wseq) + 8, size);
+      pend += size;
+      pstart = pend;
+      publish();
+    }
+    finally {
+      exit();
+    }
   }
 
+  /**
+   * Makes the data written since the last flush available to the reader.
+   *
+   * @throws ClosedException if the socket is closed while data is pending
+   */
   public void flush() {
-    final int pkt = PACKET_INFO + (wseq & packetMask) * LEN_PACKET_INFO;
-    final ByteBufferAccessor acc = this.acc;
+    if (!enter()) {
+      if (dirty)
+        throw new ClosedException("Closed");
+      return;
+    }
+    try {
+      flush0();
+    }
+    finally {
+      exit();
+    }
+  }
+
+  private void flush0() {
     if (dirty) {
-      acc.putInt(pkt, pstart);
-      acc.putInt(pkt + 4, pend - pstart);
-      acc.putInt(WSEQ, ++wseq);
+      final int pkt = packetInfo(wseq);
+      setLong(pkt, pstart);
+      setInt(pkt + 8, (int) (pend - pstart));
 
       this.pstart = this.pend = align(pend);
-
       dirty = false;
-      if (futex != null)
-        futex.signal(wseq);
+
+      publish();
     }
+  }
+
+  /**
+   * Publishes the packet whose info has just been written.
+   */
+  private void publish() {
+    setLongRelease(WSEQ, ++wseq);
+    if (futex != null)
+      futex.signal();
   }
 
   /**
    * Returns specified position, rounded up to the packet alignment.
    */
-  private int align(int pos) {
+  private long align(long pos) {
     return (pos + alignMask) & ~alignMask;
   }
 
@@ -204,114 +264,111 @@ public class JocketWriter extends AbstractJocketBuffer {
    *
    * @param rseq reader sequence number.
    */
-  private int head(int rseq) {
+  private long head(long rseq) {
     // if all packets are read, the position has been or will be reset
     if (wseq == rseq)
       return 0;
 
-    final int pkt = PACKET_INFO + ((wseq - 1) & packetMask) * LEN_PACKET_INFO;
-
-    return acc.getInt(pkt) + acc.getInt(pkt + 4);
-  }
-
-  /**
-   * Returns the absolute position of specified packet.
-   *
-   * @param seq a packet number
-   */
-  private int start(int seq) {
-    return acc.getInt(PACKET_INFO + (seq & packetMask) * LEN_PACKET_INFO);
+    final int pkt = packetInfo(wseq - 1);
+    return getLong(pkt) + getInt(pkt + 8);
   }
 
   /**
    * Returns how many bytes can be written in one single chunk at current
-   * position. We can be limited either by the bounds of the ByteBuffer or by
-   * how many bytes must still be read.
-   * <p>
-   * Result is (X - head) where X is the smallest of:
-   * <ul>
-   * <li>head + capacity - head % capacity (the end of the buffer)
-   * <li>tail + capacity
-   * </ul>
-   * where head is the write position (pend) and tail is the start of the
-   * oldest packet not read yet: the one of the reader or, if the reader has
-   * read all flushed packets, the pending one.
+   * position (head). We can be limited either by the end of the buffer or by
+   * the tail, i.e. the start of the oldest packet not read yet: the one of the
+   * reader or, if the reader has read all flushed packets, the pending one.
    * <p>
    * This method works only if pend/pstart are reset to 0 when the reader has
    * read everything (otherwise 0 can be returned instead of capacity).
    *
    * @param rseq sequence number of reader
    */
-  private int getAvailableSpace(int rseq) {
-    // the slot of the pending packet holds a stale position until flush()
-    final int tail = rseq == wseq ? pstart : start(rseq);
-    // negative when alignment padding has moved pend past the tail
-    return Math.max(0, Math.min(tail, pend - (pend & dataMask)) + capacity - pend);
+  private int getAvailableSpace(long rseq) {
+    // the slot of the pending packet holds a stale position until flush(). The
+    // reader moves the start of its packet forward after a partial read
+    final long tail = rseq == wseq ? pstart : getLongAcquire(packetInfo(rseq));
 
-    // NB: this is the contracted form of:
-    // -----------------------------------
-    // int lim1 = pend + capacity - (pend & dataMask);
-    // int lim2 = tail + capacity;
-    // return Math.min(lim1, lim2) - pend;
-  }
+    final long toEnd = capacity - (pend & dataMask);
+    final long toTail = tail + capacity - pend;
 
-  /**
-   * Returns the reader sequence number.
-   */
-  private final int rseq() {
-    return acc.getInt(RSEQ);
+    // toTail is negative when alignment padding has moved pend past the tail
+    return (int) Math.max(0, Math.min(toEnd, toTail));
   }
 
   /**
    * Returns how many bytes can be written (mainly for test purposes).
    */
   public int available() {
-    // cannot write if all packets are written and the reader didn't read any
-    int rseq = rseq();
-    if (wseq - rseq >= npackets)
+    if (!enter())
       return 0;
-    return getAvailableSpace(rseq);
+    try {
+      // cannot write if all packets are written and the reader didn't read any
+      long rseq = getLongAcquire(RSEQ);
+      if (wseq - rseq >= npackets)
+        return 0;
+      return getAvailableSpace(rseq);
+    }
+    finally {
+      exit();
+    }
   }
 
   @Override
   protected void close0() {
-    writeMemoryBarrier(); // not sure if really necessary
-    acc.putInt(WSEQ, -1);
+    setIntRelease(WCLOSED, 1);
     if (futex != null)
-      futex.signal(-1);
-    acc.unmap();
+      futex.signal();
   }
 
   /**
    * For testing purposes.
    */
-  public int getSeqNum() {
+  public long getSeqNum() {
     return wseq;
   }
 
   /**
    * For testing purposes.
    */
-  public int getPosition() {
-    return head(rseq());
+  public long getPosition() {
+    if (!enter())
+      throw new ClosedException("Closed");
+    try {
+      return head(getLongAcquire(RSEQ));
+    }
+    finally {
+      exit();
+    }
   }
 
   /**
    * For testing purposes.
    */
   public String debug() {
-    return String
-        .format("wseq=%d rseq=%d pstart=%d plen=%d tail=%d dirty=%b capacity=%d",
-                wseq,
-                rseq(),
-                pstart,
-                pend - pstart,
-                head(rseq()),
-                pend > pstart,
-                capacity);
+    if (!enter())
+      return "closed";
+    try {
+      long rseq = getLongAcquire(RSEQ);
+      return String.format("wseq=%d rseq=%d pstart=%d plen=%d tail=%d dirty=%b capacity=%d",
+                           wseq,
+                           rseq,
+                           pstart,
+                           pend - pstart,
+                           head(rseq),
+                           pend > pstart,
+                           capacity);
+    }
+    finally {
+      exit();
+    }
   }
 
+  /**
+   * Signals new packets on the futex, for a reader which has called
+   * {@link JocketReader#useFutex()}. The buffer must be a direct one.
+   */
   public void useFutex() {
-    this.futex = new Futex((MappedByteBuffer) buf, FUTEX, -1);
+    this.futex = new Futex(buf, FUTEX);
   }
 }

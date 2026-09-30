@@ -1,118 +1,94 @@
 package jocket.futex;
 
-import java.nio.MappedByteBuffer;
-
-import jocket.wait.WaitStrategy;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 /**
- * When available (i.e. only under linux) allows to perform interprocess
- * wait/notify. The writer calls signal() to notify new packets, the reader
- * calls pauseWhile() when it has read all available packets and must wait for a
- * new one.
- * 
+ * A futex word in a direct (mapped) buffer, allowing interprocess wait/notify.
+ * Only available under Linux, through a JNI library.
+ * <p>
+ * The word is 0 when idle, -1 when a thread is waiting (or about to), and 1
+ * when a signal is pending. The waiter calls {@link #await(long)} when it has
+ * nothing left to do, the other side calls {@link #signal()} when it has
+ * produced something. Only the slow path (a thread actually waiting) involves
+ * a JNI call and a system call.
+ *
  * @author pcdv
  */
-public class Futex implements WaitStrategy {
+public final class Futex {
 
-  private static boolean libAvailable;
+  private static final VarHandle INT =
+    MethodHandles.byteBufferViewVarHandle(int[].class, ByteOrder.nativeOrder());
 
-  private final long futAddr;
+  private static final boolean libAvailable = loadLibrary();
 
-  private final long seqAddr;
+  private final ByteBuffer buf;
 
-  private final MappedByteBuffer buf;
+  private final int pos;
 
-  private final int seqPos;
-
-  /**
-   * @param b a mapped byte buffer
-   * @param futexPos position of the futex variable in buffer
-   * @param seqPos position where the writer writes its latest sequence number
-   */
-  public Futex(MappedByteBuffer b, int futexPos, int seqPos) {
-    this.buf = b;
-    this.seqPos = seqPos;
-    this.futAddr = computeAddress(b, futexPos);
-    this.seqAddr = computeAddress(b, seqPos);
-  }
+  private final long addr;
 
   /**
-   * Blocks until the writer posts a packet with a seqnum higher than specified.
+   * @param buf a direct buffer, shared with the other process
+   * @param pos position of the futex word in the buffer (4-byte aligned)
    */
-  @Override
-  public void pauseWhile(int currentSeq) {
-    pause(futAddr, seqAddr, currentSeq);
-  }
-
-  private static native void pause(long futAddr, long seqAddr, int seq);
-
-  @Override
-  public void reset() {
-  }
-
-  private static long computeAddress(MappedByteBuffer b, int pos) {
-    try {
-      return getAddress(b) + pos;
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
+  public Futex(ByteBuffer buf, int pos) {
+    if (!buf.isDirect())
+      throw new IllegalArgumentException("Not a direct buffer");
+    this.buf = buf;
+    this.pos = pos;
+    this.addr = getAddress(buf) + pos;
   }
 
   /**
-   * For test purposes. Unsafe. Do not use.
+   * Waits until {@link #signal()} is called or the timeout expires. Returns at
+   * once if a signal is pending. May also return spuriously: the caller must
+   * check its condition again.
    */
-  public int getInt(int pos) {
-    return getInt0(computeAddress(buf, pos));
+  public void await(long timeoutNanos) {
+    if ((int) INT.compareAndExchange(buf, pos, 0, -1) == 0)
+      wait0(addr, -1, timeoutNanos);
+    // consumes the signal, and resets the word after a timeout
+    INT.setRelease(buf, pos, 0);
   }
 
   /**
-   * For test purposes. Unsafe. Do not use.
+   * Wakes up the waiting thread, if any. Otherwise, makes the next call to
+   * {@link #await(long)} return at once.
    */
-  public void setInt(int pos, int value) {
-    setInt0(computeAddress(buf, pos), value);
-  }
-
-  private static native int getInt0(long addr);
-
-  private static native void setInt0(long addr, int value);
-
-  /**
-   * Signals the reader that a new packet is available. Happens mainly during
-   * flush(). It includes the cost of a JNI call and a native CAS. A FUTEX_CALL
-   * syscall is performed only if necessary (i.e. the reader is waiting for
-   * data).
-   * 
-   * @param seq
-   */
-  public void signal(int seq) {
-    signal0(futAddr);
-  }
-
-  @Deprecated
-  public void await() {
-    await0(futAddr);
-  }
-
-  public static native long getAddress(MappedByteBuffer b);
-
-  private static native void signal0(long addr);
-
-  @Deprecated
-  private static native void await0(long addr);
-
-  public static native long rdtsc();
-
-  static {
-    try {
-      LibLoader.loadLibrary("JocketFutex");
-      libAvailable = true;
-    } catch (Throwable e) {
-      libAvailable = false;
-      System.err.println("WARN: JNI futex lib is NOT available: " + e);
+  public void signal() {
+    if ((int) INT.compareAndExchange(buf, pos, 0, 1) == -1) {
+      INT.setRelease(buf, pos, 0);
+      wake0(addr);
     }
   }
 
   public static boolean isAvailable() {
     return libAvailable;
+  }
+
+  private static native long getAddress(ByteBuffer b);
+
+  /**
+   * FUTEX_WAIT: sleeps if the word at addr still equals expected.
+   */
+  private static native void wait0(long addr, int expected, long timeoutNanos);
+
+  /**
+   * FUTEX_WAKE: wakes up one thread waiting on the word at addr.
+   */
+  private static native void wake0(long addr);
+
+  private static boolean loadLibrary() {
+    try {
+      LibLoader.loadLibrary("JocketFutex");
+      return true;
+    }
+    catch (Throwable e) {
+      System.err.println("WARN: JNI futex lib is NOT available: " + e);
+      return false;
+    }
   }
 }

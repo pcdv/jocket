@@ -1,5 +1,6 @@
 package jocket.net;
 
+import java.io.Closeable;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -9,7 +10,9 @@ import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
-import java.util.Vector;
+import java.util.ArrayList;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import jocket.futex.Futex;
 import jocket.impl.JocketInputStream;
@@ -17,11 +20,14 @@ import jocket.impl.JocketOutputStream;
 import jocket.impl.JocketReader;
 import jocket.impl.JocketWriter;
 
-public class JocketSocket {
+public class JocketSocket implements Closeable {
 
   private static Thread hook;
 
-  private static final Vector<JocketSocket> sockets = new Vector<JocketSocket>();
+  /**
+   * Open sockets, closed by a shutdown hook.
+   */
+  private static final Set<JocketSocket> sockets = ConcurrentHashMap.newKeySet();
 
   private final JocketReader reader;
 
@@ -83,6 +89,9 @@ public class JocketSocket {
 
     this.reader = jfr.reader();
     this.writer = jfw.writer();
+    // the mappings are released when the socket is closed
+    jfr.close();
+    jfw.close();
 
     if (Futex.isAvailable()) {
       writer.useFutex();
@@ -101,7 +110,7 @@ public class JocketSocket {
       hook = new Thread("Jocket-shutdown") {
         @Override
         public void run() {
-          for (JocketSocket s : sockets) {
+          for (JocketSocket s : new ArrayList<>(sockets)) {
             s.close();
           }
         }
@@ -127,9 +136,15 @@ public class JocketSocket {
     return input;
   }
 
+  /**
+   * Closes the socket. Can be called from any thread: waits for the read or
+   * write in progress, if any.
+   */
+  @Override
   public void close() {
     reader.close();
     writer.close();
+    sockets.remove(this);
   }
 
 }
