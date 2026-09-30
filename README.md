@@ -1,41 +1,112 @@
-Jocket
-======
+# Jocket
 
-Low-latency replacement for local Java sockets, using shared memory.
+[![build](https://github.com/pcdv/jocket/actions/workflows/build.yml/badge.svg)](https://github.com/pcdv/jocket/actions/workflows/build.yml)
 
-It has been developed under Linux and works optimally on this platform
-thanks to the use of a [futex](https://en.wikipedia.org/wiki/Futex) accessed
-through JNI. The futex allows to implement inter-process wait/notify.
+Jocket is a low-latency replacement for local Java sockets, based on shared
+memory. Two processes on the same host exchange data through memory-mapped
+files instead of the TCP stack, with a median round trip of about half a
+microsecond.
 
-Jocket also works on macOS and Windows, without a futex: a thread waiting for
-data spins, then yields, then sleeps for increasing durations. This keeps the
-latency low while data flows, but is not ideal in all situations. It is
-possible that a similar feature exists on macOS/Windows but I have not looked
-into it yet.
+- **Low latency**: 10 to 100 times lower than a TCP socket on the loopback
+  interface (see [Performance](#performance)).
+- **Familiar API**: `ServerJocket` and `JocketSocket` mimic `ServerSocket` and
+  `Socket`, with standard input and output streams.
+- **Non-blocking and zero-copy APIs** for the most demanding use cases.
+- **Efficient waiting under Linux**: an idle reader sleeps on a
+  [futex](https://en.wikipedia.org/wiki/Futex) and is woken up as soon as data
+  is available.
+- **Robust**: sockets can be closed from any thread, and each side detects the
+  death of the other process.
 
-Jocket requires Java 21.
+## Requirements
 
-I don't currently use Jocket in production but several people have
-contacted me for advice or bug reports so I suspect some people do :)
+- Java 21 or later.
+- Linux, macOS or Windows. Linux is the reference platform:
 
-Performance
------------
+| Platform               | Waiting for data                                                        |
+|------------------------|-------------------------------------------------------------------------|
+| Linux x86-64           | Futex, through a JNI library included in the jar                        |
+| Linux, other platforms | Futex when built from source on that platform, otherwise as below       |
+| macOS, Windows         | Spinning, then yielding, then sleeping for increasing durations        |
 
-Current benchmarks show a 10-100x performance improvement when compared to
-a standard socket.
+Without the futex, latency remains low while data flows, but a waiting thread
+consumes more CPU and reacts more slowly after long idle periods.
 
-![alt text](docs/bench.png "The thick red line is around 500 nanoseconds")
+## Installation
 
-The chart above displays the roundtrip latency (in microseconds) between two
+Jocket is available through [JitPack](https://jitpack.io/#pcdv/jocket).
+With Gradle:
+
+```groovy
+repositories {
+  maven { url 'https://jitpack.io' }
+}
+
+dependencies {
+  implementation 'com.github.pcdv:jocket:<version>'
+}
+```
+
+## Usage
+
+### Sockets
+
+```java
+// server
+try (ServerJocket server = new ServerJocket(4242);
+     JocketSocket socket = server.accept()) {
+  InputStream in = socket.getInputStream();
+  OutputStream out = socket.getOutputStream();
+  // ...
+}
+
+// client
+try (JocketSocket socket = new JocketSocket(4242)) {
+  InputStream in = socket.getInputStream();
+  OutputStream out = socket.getOutputStream();
+  // ...
+}
+```
+
+Data written to the output stream becomes visible to the other side when
+`flush()` is called.
+
+### Low-level API
+
+`JocketWriter` and `JocketReader` give direct, non-blocking access to a shared
+buffer, which avoids the overhead of streams. They can also be used between
+two threads of the same process:
+
+```java
+JocketFile file = new JocketFile(1024, 1 << 20); // max packets, data capacity
+JocketWriter writer = file.writer();
+JocketReader reader = file.reader();
+
+int written = writer.write(data, 0, data.length); // 0 if the buffer is full
+writer.flush();
+
+int read = reader.read(buffer, 0, buffer.length); // 0 if no data is available
+```
+
+`JocketWriter.newPacket()` / `send()` and `JocketReader.nextPacket()` /
+`release()` form an experimental zero-copy API, which exposes the shared
+memory directly as `ByteBuffer`s.
+
+## Performance
+
+![Round-trip latency of Jocket](docs/bench.png "The thick red line is around 500 nanoseconds")
+
+The chart shows the round-trip latency, in microseconds, between two
 processes:
- - T0: the client sends a PING (4 bytes) to the server
- - T1: the client receives a PONG (1024 bytes) from the server
 
-This benchmark was run in 2017 on an Intel Core i5-2500 (4-core 3.30GHz) CPU.
-In 2026, the median roundtrip is still around 0.5 microseconds (under WSL2,
-on an Intel Core Ultra 7 155H laptop).
+1. the client sends a 4-byte request (PING) to the server,
+2. the client receives a 1024-byte response (PONG).
 
-The output of the benchmark should look like:
+It was measured in 2017 on an Intel Core i5-2500 (4 cores, 3.30 GHz). In 2026,
+the median round trip remains around 0.5 microseconds (under WSL2, on an Intel
+Core Ultra 7 155H).
+
+The benchmark can be run with `run-bench.sh`, after building:
 
 ```
 $ ./run-bench.sh -Dreps=500000
@@ -67,160 +138,101 @@ Dumping results in /tmp/Socket
 99.9999%      (      1) :  4546,98 (us)
 ```
 
-The following options can be passed to the run-bench.sh script
- - -Dtcp=true : uses a normal socket instead of Jocket (default=false)
- - -Dreps=1000 : sets the number of repetitions to 1000 (default=300000)
- - -Dpause=1000 : pauses for 1000 nanoseconds between each rep (default=0)
- - -DreplySize=4096 : sets the size of the PONG reply (default=1024)
- - -Dwarmup=0 : sets the number of reps during warmup to 0 (default=50000)
- - -Dport=1234 : use port 1234 (default=3333)
- - -Dnostats=true : do not record and dump latencies (useful if number of reps is too big)
+| Option             | Description                                          | Default  |
+|--------------------|------------------------------------------------------|----------|
+| `-Dtcp=true`       | Uses a TCP socket instead of Jocket                  | `false`  |
+| `-Dreps=N`         | Number of repetitions                                | `300000` |
+| `-Dwarmup=N`       | Number of repetitions during warmup                  | `50000`  |
+| `-Dpause=N`        | Pause between repetitions, in nanoseconds            | `0`      |
+| `-DreplySize=N`    | Size of the response, in bytes                       | `1024`   |
+| `-Dport=N`         | TCP port                                             | `3333`   |
+| `-Dnostats=true`   | Does not record latencies (for large numbers of repetitions) | `false`  |
 
-The client outputs a file Jocket or Socket in the temporary directory (/tmp
-under Linux), which can be fed into Gnuplot, Excel etc.
-
-__Example with gnuplot:__
+The client writes the latencies to a file named `Jocket` or `Socket` in the
+temporary directory, which can be plotted, e.g. with gnuplot:
 
 ```
 plot '/tmp/Jocket' using 1 with lines title 'Jocket', '/tmp/Socket' using 1 with lines title 'TCP (loopback)'
 ```
 
-How to build
-------------
+## How it works
 
-Gradle uses a locally installed JDK 21, or downloads one if none is found.
+Each direction of a socket uses a shared buffer, backed by a memory-mapped
+file, with one writer and one reader.
 
-Just run the following commands to build Jocket and run the benchmark.
+`JocketWriter.write()` appends data to the buffer, and `JocketWriter.flush()`
+publishes it as a packet, which `JocketReader.read()` can read immediately.
+The buffer is bounded both by a maximum number of packets and by a maximum
+number of bytes written but not read yet. When either limit is reached,
+`write()` returns 0 until the reader has read some data.
+
+A `JocketSocket` connects to a `ServerJocket` through a TCP socket bound to the
+loopback interface. The server sends the paths of the two exchange files,
+which the client opens; both sides then delete the files, which remain mapped.
+This connection is only used for this handshake.
+
+### Closing and failures
+
+- `close()` can be called from any thread, e.g. to wake up a thread blocked on
+  a read. It waits for the read or write in progress, if any, before unmapping
+  the exchange file. A shutdown hook closes the sockets that remain open.
+- When the writer closes, the reader first receives all the data flushed
+  before, then the end of stream.
+- When one side cannot progress (no data to read, or no space to write), it
+  checks at most once per second that the other process is still alive. If it
+  died without closing (e.g. killed with SIGKILL), the reader receives the end
+  of stream, and the writer a `ClosedException`. This check is disabled when
+  the two processes run in different PID namespaces, e.g. two containers
+  sharing `/dev/shm`.
+
+### Security
+
+- Exchange files have random names and are only accessible to their owner:
+  the client must run as the same user as the server.
+- The client only opens regular files of the exchange directory, named like
+  the files created by servers, and does not follow symbolic links.
+- Like a TCP server bound to the loopback interface, a `ServerJocket` accepts
+  connections from any local process.
+
+## Configuration
+
+The following system properties are supported:
+
+| Property                  | Description                                                                                                      | Default                                               |
+|---------------------------|------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------|
+| `jocket.dir`              | Directory of the exchange files. Must be the same for the server and its clients.                                | `/dev/shm` (memory only) under Linux, `java.io.tmpdir` elsewhere |
+| `jocket.maxPackets`       | Maximum number of packets in the buffers created by a `ServerJocket` (a power of 2)                              | `1024`                                                |
+| `jocket.capacity`         | Data capacity, in bytes, of the buffers created by a `ServerJocket` (a power of 2)                               | `4194304` (4 MB)                                      |
+| `jocket.peerCheckMillis`  | Minimum time between two checks that the other process is alive, in milliseconds                                | `1000`                                                |
+
+## Building
 
 ```
 git clone https://github.com/pcdv/jocket.git
 cd jocket
 ./gradlew build
-./run-bench.sh
-./run-bench.sh -Dtcp=true
 ```
 
-Under Linux, the build also compiles the JNI futex library, which requires
-`gcc`. The library is only built for the architecture of the build machine.
+Gradle uses a locally installed JDK 21, or downloads one if none is found.
+Under Linux, the build also compiles the JNI futex library with `gcc`, for the
+architecture of the build machine only.
 
-Using Jocket as a dependency
-----------------------------
+## Changelog
 
-Jocket is available through [JitPack](https://jitpack.io/#pcdv/jocket), so
-you can add the following to your `build.gradle` file:
+### 0.3 (unreleased)
 
-```groovy
-repositories {
-  maven { url 'https://jitpack.io' }
-}
+- Requires Java 21.
+- The layout of exchange files and the handshake have changed: version 0.3
+  cannot connect to earlier versions.
+- Shared memory is accessed with the required ordering guarantees (acquire /
+  release, through VarHandles), including on ARM, e.g. Apple Silicon.
+- Fixed JVM crashes when a socket was used or closed concurrently, or used
+  after being closed, and data loss or corruption in several corner cases.
+- Detection of dead peers, and progressive backoff when waiting without a
+  futex.
+- Hardened handshake: `accept()` survives failing clients, exchange files are
+  private, and clients check the paths they receive.
 
-dependencies {
-  implementation 'com.github.pcdv:jocket:<version>'
-}
-```
+## License
 
-NB: the jar includes the JNI library for Linux on x86-64, the architecture on
-which JitPack builds it. Elsewhere (e.g. Linux on ARM), Jocket works without
-the futex.
-
-API
----
-
-Currently, there are 2 APIs:
- - JocketReader/JocketWriter: low-level, non blocking API
- - JocketSocket: high-level, blocking API mimicking java.net.Socket
-
-The benchmark used to generate the above diagram is based on the JocketSocket API.
-
-
-How it works
-------------
-
-Jocket is built around a concept of shared buffer, accessed by a reader and a writer.
-
-`JocketWriter.write()` can be called several times to append data to the buffer. When `JocketWriter.flush()` is called, a packet is flushed and can immediately be read by `JocketReader.read()`.
-
-The buffer is bound by a double capacity:
- - the maximum number of packets that can be written without being read
- - the maximum number of bytes that can be written without being read
-
-When any of these limits is reached, `JocketWriter.write()` does nothing and returns zero. As soon as `JocketReader.read()` is called, it is again possible to write data.
-
-The reader and writer can be:
- - in the same process: allows to transfer efficiently a stream of bytes from a thread to another
- - in two different processes: allows to transmit data between two local processes faster than with a TCP socket
-
-To implement a bidirectional socket, two shared buffers are required, each wrapping an mmap'ed file.
-
-For convenience, the current jocket API closely mimics the java.net API, eg.
-
-
-```java
-// server
-ServerJocket srv = new ServerJocket(4242);
-JocketSocket sock = srv.accept();
-
-// client
-JocketSocket sock = new JocketSocket(4242);
-InputStream in = sock.getInputStream();
-OutputStream out = sock.getOutputStream();
-```
-
-Otherwise, Jocket readers and writers have their own API allowing to perform non-blocking read/writes,
-potentially faster than with input/output streams.
-
-The client and the server perform a handshake through a TCP socket bound to
-the loopback interface: the server sends the paths of the two exchange files,
-which the client opens. Both sides then delete the files, which remain mapped.
-
-Closing and failures
---------------------
-
- - `close()` can be called from any thread, e.g. to wake up a thread blocked
-   reading: it waits for the read or write in progress before unmapping the
-   exchange file. A shutdown hook closes the sockets left open.
- - When the writer closes, the reader first reads all the data flushed
-   before, then gets the end of stream (-1).
- - Each side checks that the other process is alive when it cannot progress
-   (no data to read, or no space to write), at most once per second. If the
-   peer died without closing anything (e.g. killed with SIGKILL), a reader
-   gets the end of stream, and a writer gets a `ClosedException`. This check
-   is skipped when the two processes do not share the same PID namespace
-   (e.g. two containers sharing `/dev/shm`).
-
-Security
---------
-
- - Exchange files are created with a random name, readable and writable by
-   their owner only: the client must run as the same user as the server.
- - The client only opens regular files of the exchange directory, named like
-   the ones servers create, and without following symbolic links.
- - Like a TCP server on the loopback interface, a ServerJocket accepts
-   connections from any local process.
-
-Configuration
--------------
-
-The following system properties can be set:
- - `jocket.dir`: directory of the exchange files. Defaults to `/dev/shm`
-   (tmpfs, i.e. memory only) under Linux, and to the temporary directory
-   elsewhere. It must be the same for the server and its clients.
- - `jocket.maxPackets` and `jocket.capacity`: default number of packets and
-   default data capacity (in bytes) of the exchange files created by a
-   ServerJocket. Both must be powers of 2. Default to 1024 and 4194304 (4MB).
- - `jocket.peerCheckMillis`: minimum time between two checks that the peer
-   process is alive. Defaults to 1000.
-
-Changes in 0.3 (unreleased)
----------------------------
-
- - Requires Java 21.
- - The layout of exchange files and the handshake have changed: Jocket 0.3
-   cannot connect to earlier versions.
- - Memory accesses have the ordering guarantees they need, including on ARM
-   (e.g. Apple Silicon), through VarHandles.
- - Fixed crashes when a socket is used or closed concurrently, or used after
-   being closed, and data loss or corruption in several corner cases.
- - Detection of dead peers, progressive backoff when waiting without a futex.
- - Hardened handshake: robust `accept()`, private exchange files, checked
-   paths.
+Jocket is released under the [Apache License 2.0](LICENSE).
